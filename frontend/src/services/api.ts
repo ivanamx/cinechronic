@@ -3,28 +3,49 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+// ============================================
+// CONFIGURACIÓN DE URLS DEL API
+// ============================================
+// Cambia USE_PRODUCTION a true para forzar producción incluso en desarrollo
+const USE_PRODUCTION = false;
+
+// URL de desarrollo (túnel o local)
+const DEV_URL = 'https://hot-paths-invite.loca.lt/api'; // Cambia esto por tu túnel de desarrollo
+
+// URL de producción (tu VPS/dominio)
+// Cambia esto por tu URL de producción real: https://api.tudominio.com/api
+const PROD_URL = Constants.expoConfig?.extra?.apiUrl || 
+                 process.env.EXPO_PUBLIC_API_URL || 
+                 'https://your-production-api.com/api';
+
+// ============================================
 // Detectar la URL base del API según la plataforma
+// ============================================
 const getApiBaseUrl = () => {
-  // En producción, usar la URL de producción desde variables de entorno o config
-  if (!__DEV__) {
-    // Prioridad: Variable de entorno > Config de Expo > Fallback
-    const prodUrl = process.env.EXPO_PUBLIC_API_URL || 
-                   Constants.expoConfig?.extra?.apiUrl || 
-                   'https://your-production-api.com/api';
-    console.log('🌐 Producción - API URL:', prodUrl);
-    return prodUrl;
+  // Si está en producción (build de EAS) o USE_PRODUCTION está en true
+  if (!__DEV__ || USE_PRODUCTION) {
+    console.log('🌐 Producción - API URL:', PROD_URL);
+    return PROD_URL;
   }
 
+  // En desarrollo:
+  
   // En web, siempre usar localhost
   if (Platform.OS === 'web') {
     return 'http://localhost:3000/api';
   }
 
-  // Verificar si hay una URL de ngrok configurada (PRIORIDAD ALTA)
+  // Verificar si hay una URL de ngrok/túnel configurada (PRIORIDAD ALTA)
   const ngrokUrl = Constants.expoConfig?.extra?.ngrokUrl || process.env.EXPO_PUBLIC_NGROK_URL;
   if (ngrokUrl) {
-    console.log('🌐 Usando ngrok URL:', ngrokUrl);
+    console.log('🌐 Usando túnel URL:', ngrokUrl);
     return `${ngrokUrl}/api`;
+  }
+
+  // Si hay una URL de desarrollo configurada, usarla
+  if (DEV_URL && DEV_URL !== 'https://hot-paths-invite.loca.lt/api') {
+    console.log('🌐 Usando URL de desarrollo:', DEV_URL);
+    return DEV_URL;
   }
   
   // Para iOS/Android: Usar la MISMA IP que Expo está usando

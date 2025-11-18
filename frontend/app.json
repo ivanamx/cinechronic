@@ -65,6 +65,7 @@
       "ngrokUrl": "https://hot-paths-invite.loca.lt",
       "apiUrl": "https://your-production-api.com/api"
     },
+    "_comment": "IMPORTANTE: Actualiza 'apiUrl' arriba con tu URL de producción real (ej: https://api.tudominio.com/api) antes de hacer el build de producción",
     "plugins": [
       "expo-font"
     ]
