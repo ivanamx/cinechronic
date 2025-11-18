@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "@babel/plugin-syntax-import-meta": "^7.10.4",
+    "babel-plugin-transform-import-meta": "^2.3.3"
+  }
+}
