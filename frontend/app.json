@@ -63,7 +63,7 @@
         "projectId": "849f2e17-178a-425a-9b19-b10bae9ef206"
       },
       "ngrokUrl": "https://hot-paths-invite.loca.lt",
-      "apiUrl": "https://your-production-api.com/api"
+      "apiUrl": "https://api.golfclubsforbeginners.com/api"
     },
     "_comment": "IMPORTANTE: Actualiza 'apiUrl' arriba con tu URL de producción real (ej: https://api.tudominio.com/api) antes de hacer el build de producción",
     "plugins": [

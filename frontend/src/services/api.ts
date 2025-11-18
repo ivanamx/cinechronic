@@ -13,10 +13,9 @@ const USE_PRODUCTION = false;
 const DEV_URL = 'https://hot-paths-invite.loca.lt/api'; // Cambia esto por tu túnel de desarrollo
 
 // URL de producción (tu VPS/dominio)
-// Cambia esto por tu URL de producción real: https://api.tudominio.com/api
 const PROD_URL = Constants.expoConfig?.extra?.apiUrl || 
                  process.env.EXPO_PUBLIC_API_URL || 
-                 'https://your-production-api.com/api';
+                 'https://api.golfclubsforbeginners.com/api';
 
 // ============================================
 // Detectar la URL base del API según la plataforma
