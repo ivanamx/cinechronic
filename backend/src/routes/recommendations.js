@@ -153,7 +153,6 @@ async function fetchPopularDirectors() {
       return [];
     }
 
-    // Construir headers y URL correctamente según la documentación de TMDB
     const headers = TMDB_ACCESS_TOKEN
       ? { 
           'Authorization': `Bearer ${TMDB_ACCESS_TOKEN}`, 
@@ -163,69 +162,147 @@ async function fetchPopularDirectors() {
           'accept': 'application/json' 
         };
 
-    // Obtener múltiples páginas para tener más opciones
-    const allDirectors = [];
-    const pagesToFetch = 3; // Obtener las primeras 3 páginas (60 personas aprox)
+    const allDirectors = new Map(); // Usar Map para evitar duplicados por ID
     
-    console.log(`🔑 Usando autenticación: ${TMDB_ACCESS_TOKEN ? 'Bearer Token' : 'API Key'}`);
-    if (TMDB_ACCESS_TOKEN) {
-      console.log(`🔑 Bearer Token (primeros 20 chars): ${TMDB_ACCESS_TOKEN.substring(0, 20)}...`);
-    }
-    if (TMDB_API_KEY) {
-      console.log(`🔑 API Key (primeros 10 chars): ${TMDB_API_KEY.substring(0, 10)}...`);
-    }
-    
-    for (let page = 1; page <= pagesToFetch; page++) {
-      // Si usamos Bearer Token, no necesitamos api_key en la URL
-      // Si usamos API Key, debe ir en la URL como query parameter
-      const url = TMDB_ACCESS_TOKEN
-        ? `${TMDB_BASE_URL}/person/popular?language=en-US&page=${page}`
-        : `${TMDB_BASE_URL}/person/popular?api_key=${TMDB_API_KEY}&language=en-US&page=${page}`;
-
-      console.log(`📡 Llamando a: ${url.substring(0, 50)}...`);
+    // ESTRATEGIA 1: Obtener directores de películas populares (más confiable)
+    console.log('🎬 Estrategia 1: Obteniendo directores de películas populares...');
+    try {
+      // Obtener películas populares
+      const moviesUrl = TMDB_ACCESS_TOKEN
+        ? `${TMDB_BASE_URL}/movie/popular?language=en-US&page=1`
+        : `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&language=en-US&page=1`;
       
-      const response = await fetch(url, { headers });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ Error en página ${page}: ${response.status} - ${errorText}`);
-        continue;
-      }
-
-      const data = await response.json();
-      console.log(`📊 Página ${page}: ${data.results?.length || 0} resultados`);
-      
-      // Debug: ver qué departamentos hay
-      if (page === 1 && data.results && data.results.length > 0) {
-        const departments = [...new Set(data.results.map(p => p.known_for_department).filter(Boolean))];
-        console.log(`📋 Departamentos encontrados en página 1: ${departments.join(', ')}`);
-      }
-      
-      for (const person of data.results || []) {
-        if (!person || !person.name || !person.id) {
-          continue;
-        }
+      const moviesResponse = await fetch(moviesUrl, { headers });
+      if (moviesResponse.ok) {
+        const moviesData = await moviesResponse.json();
+        const popularMovies = (moviesData.results || []).slice(0, 20); // Primeras 20 películas
         
-        // Verificar si es director - TMDB devuelve 'Directing' (con mayúscula)
-        const department = person.known_for_department || '';
-        const isDirector = department === 'Directing' || department.toLowerCase() === 'directing';
+        console.log(`📽️  Obteniendo directores de ${popularMovies.length} películas populares...`);
         
-        if (isDirector) {
-          allDirectors.push({
-            id: person.id,
-            name: person.name,
-          });
-          if (allDirectors.length <= 5) { // Solo log los primeros 5 para no saturar
-            console.log(`  ✅ Director encontrado: ${person.name} (dept: ${department})`);
+        // Obtener directores de cada película
+        for (const movie of popularMovies) {
+          if (!movie.id) continue;
+          
+          try {
+            const creditsUrl = TMDB_ACCESS_TOKEN
+              ? `${TMDB_BASE_URL}/movie/${movie.id}/credits?language=en-US`
+              : `${TMDB_BASE_URL}/movie/${movie.id}/credits?api_key=${TMDB_API_KEY}&language=en-US`;
+            
+            const creditsResponse = await fetch(creditsUrl, { headers });
+            if (creditsResponse.ok) {
+              const creditsData = await creditsResponse.json();
+              const director = (creditsData.crew || []).find(
+                (member) => member && (member.job || '').toLowerCase() === 'director'
+              );
+              
+              if (director && director.id && !allDirectors.has(director.id)) {
+                allDirectors.set(director.id, {
+                  id: director.id,
+                  name: director.name,
+                });
+                if (allDirectors.size <= 10) {
+                  console.log(`  ✅ Director encontrado: ${director.name} (de ${movie.title})`);
+                }
+              }
+            }
+            
+            // Pequeño delay para no saturar la API
+            await new Promise(resolve => setTimeout(resolve, 50));
+          } catch (error) {
+            console.warn(`⚠️  Error obteniendo director de película ${movie.id}:`, error.message);
+            continue;
           }
         }
       }
+    } catch (error) {
+      console.warn('⚠️  Error en estrategia 1:', error.message);
     }
 
-    console.log(`✅ Se encontraron ${allDirectors.length} directores en personas populares`);
-    return allDirectors;
+    // ESTRATEGIA 2: Si no tenemos suficientes, usar trending people
+    if (allDirectors.size < 10) {
+      console.log('📈 Estrategia 2: Obteniendo directores de trending people...');
+      try {
+        const trendingUrl = TMDB_ACCESS_TOKEN
+          ? `${TMDB_BASE_URL}/trending/person/week?language=en-US`
+          : `${TMDB_BASE_URL}/trending/person/week?api_key=${TMDB_API_KEY}&language=en-US`;
+        
+        const trendingResponse = await fetch(trendingUrl, { headers });
+        if (trendingResponse.ok) {
+          const trendingData = await trendingResponse.json();
+          const trendingPeople = trendingData.results || [];
+          
+          for (const person of trendingPeople) {
+            if (!person || !person.id || !person.name) continue;
+            
+            const department = (person.known_for_department || '').toLowerCase();
+            if (department === 'directing' && !allDirectors.has(person.id)) {
+              allDirectors.set(person.id, {
+                id: person.id,
+                name: person.name,
+              });
+              if (allDirectors.size <= 15) {
+                console.log(`  ✅ Director trending encontrado: ${person.name}`);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️  Error en estrategia 2:', error.message);
+      }
+    }
+
+    // ESTRATEGIA 3: Si aún no tenemos suficientes, buscar directores de top rated movies
+    if (allDirectors.size < 10) {
+      console.log('⭐ Estrategia 3: Obteniendo directores de top rated movies...');
+      try {
+        const topRatedUrl = TMDB_ACCESS_TOKEN
+          ? `${TMDB_BASE_URL}/movie/top_rated?language=en-US&page=1`
+          : `${TMDB_BASE_URL}/movie/top_rated?api_key=${TMDB_API_KEY}&language=en-US&page=1`;
+        
+        const topRatedResponse = await fetch(topRatedUrl, { headers });
+        if (topRatedResponse.ok) {
+          const topRatedData = await topRatedResponse.json();
+          const topMovies = (topRatedData.results || []).slice(0, 15);
+          
+          for (const movie of topMovies) {
+            if (!movie.id || allDirectors.size >= 20) break;
+            
+            try {
+              const creditsUrl = TMDB_ACCESS_TOKEN
+                ? `${TMDB_BASE_URL}/movie/${movie.id}/credits?language=en-US`
+                : `${TMDB_BASE_URL}/movie/${movie.id}/credits?api_key=${TMDB_API_KEY}&language=en-US`;
+              
+              const creditsResponse = await fetch(creditsUrl, { headers });
+              if (creditsResponse.ok) {
+                const creditsData = await creditsResponse.json();
+                const director = (creditsData.crew || []).find(
+                  (member) => member && (member.job || '').toLowerCase() === 'director'
+                );
+                
+                if (director && director.id && !allDirectors.has(director.id)) {
+                  allDirectors.set(director.id, {
+                    id: director.id,
+                    name: director.name,
+                  });
+                }
+              }
+              
+              await new Promise(resolve => setTimeout(resolve, 50));
+            } catch (error) {
+              continue;
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️  Error en estrategia 3:', error.message);
+      }
+    }
+
+    const directorsArray = Array.from(allDirectors.values());
+    console.log(`✅ Se encontraron ${directorsArray.length} directores únicos usando métodos dinámicos`);
+    return directorsArray;
   } catch (error) {
-    console.error('Error fetching popular directors:', error);
+    console.error('❌ Error fetching popular directors:', error);
     return [];
   }
 }
