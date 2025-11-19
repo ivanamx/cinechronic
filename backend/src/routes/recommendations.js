@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const geminiService = require('../services/geminiService');
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_ACCESS_TOKEN = process.env.TMDB_ACCESS_TOKEN;
@@ -146,7 +145,7 @@ async function fetchDirectorDetails(personId) {
   }
 }
 
-async function fetchTrendingDirectorNames(limit = 5) {
+async function fetchTrendingDirectorNames(limit = 20) {
   try {
     const headers = TMDB_ACCESS_TOKEN
       ? { Authorization: `Bearer ${TMDB_ACCESS_TOKEN}`, accept: 'application/json' }
@@ -418,20 +417,114 @@ async function getDirectorMovies(directorId, directorName, options = {}) {
   }
 }
 
-async function getDirectorNameCandidates(minCount = 4) {
-  let names = [];
-  try {
-    names = await geminiService.suggestDirectorNames();
-  } catch (error) {
-    console.error('Error obteniendo directores desde Gemini:', error);
+async function getDirectorNameCandidates(count = 4) {
+  // Obtener más directores de los que necesitamos para tener opciones
+  const allNames = await fetchTrendingDirectorNames(20);
+  
+  if (!allNames || allNames.length === 0) {
+    return [];
   }
 
-  if (!names || names.length < minCount) {
-    const fallbackNames = await fetchTrendingDirectorNames(minCount * 2);
-    names = [...(names || []), ...fallbackNames];
-  }
+  // Mezclar aleatoriamente y seleccionar exactamente 'count' directores
+  const shuffled = [...allNames].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
 
-  return Array.from(new Set(names.filter(Boolean)));
+// Funciones de fallback para nombre, descripción y rating (sin Gemini)
+function generateCycleNameFallback(directorName) {
+  const lastName = directorName.split(' ').pop();
+  const names = [
+    `${lastName} Essentials`,
+    `Ciclo ${lastName}`,
+    `${lastName} Collection`,
+  ];
+  return names[Math.floor(Math.random() * names.length)];
+}
+
+function generateDescriptionFallback(directorName, movies) {
+  const DIRECTOR_STYLE_PROFILES = {
+    'Christopher Nolan': {
+      signature: 'entreteje paradojas temporales con precisión matemática',
+      focus: 'Su pulso cerebral se expande',
+      texture: 'combinando tensión épica con atmósferas de ciencia ficción',
+    },
+    'Quentin Tarantino': {
+      signature: 'combina diálogos afilados con violencia coreografiada',
+      focus: 'Su estilo grindhouse reverbera',
+      texture: 'alimentando homenajes pop y ritmo vertiginoso',
+    },
+    'Martin Scorsese': {
+      signature: 'explora moralidad y culpa con cámara inquieta',
+      focus: 'Su narración operística resalta',
+      texture: 'mostrando personajes complejos y música envolvente',
+    },
+    'Steven Spielberg': {
+      signature: 'fusiona asombro infantil con espectáculo cinematográfico',
+      focus: 'Su mirada humanista guía cada set piece',
+      texture: 'creando aventuras emotivas llenas de imaginación',
+    },
+    'Denis Villeneuve': {
+      signature: 'esculpe ciencia ficción contemplativa y melancólica',
+      focus: 'Su control del silencio y la escala es hipnótico',
+      texture: 'bañando cada imagen en un futurismo sensorial',
+    },
+    'Wes Anderson': {
+      signature: 'dibuja simetrías pop repletas de melancolía',
+      focus: 'Su paleta pastel narra obsesiones familiares',
+      texture: 'mezclando humor seco con coreografías milimétricas',
+    },
+    'David Fincher': {
+      signature: 'desmenuza obsesiones oscuras con precisión quirúrgica',
+      focus: 'Su dirección fría y meticulosa atenaza',
+      texture: 'sumergiendo cada plano en tensión psicológica',
+    },
+    'Bong Joon-ho': {
+      signature: 'salta entre géneros para desnudar la desigualdad',
+      focus: 'Su humor negro y suspenso social impactan',
+      texture: 'tejiendo sátira, empatía y caos visual',
+    },
+    'Alejandro González Iñárritu': {
+      signature: 'confronta el destino con cámara inmersiva y catártica',
+      focus: 'Su sensibilidad emocional vibra',
+      texture: 'mientras alterna realismo brutal y poesía visual',
+    },
+    'Alfonso Cuarón': {
+      signature: 'abraza planos secuencia que flotan entre intimidad y vértigo',
+      focus: 'Su humanismo detallista ilumina cada escena',
+      texture: 'fundiendo naturalismo y asombro técnico',
+    },
+  };
+
+  const DEFAULT_STYLE_PROFILE = {
+    signature: 'moldea relatos autorales de personalidad inconfundible',
+    focus: 'Su pulso narrativo imprime carácter',
+    texture: 'mezclando sensibilidad visual con riesgo temático',
+  };
+
+  const matchKey = Object.keys(DIRECTOR_STYLE_PROFILES).find(
+    (key) => key.toLowerCase() === directorName.toLowerCase()
+  );
+  const profile = DIRECTOR_STYLE_PROFILES[matchKey] || DEFAULT_STYLE_PROFILE;
+
+  const sample = (movies || [])
+    .map((m) => m.title)
+    .filter(Boolean)
+    .slice(0, 2);
+  
+  const highlight = sample.length === 2 
+    ? `${sample[0]} y ${sample[1]}`
+    : sample.length === 1 
+    ? sample[0]
+    : 'estas películas';
+
+  const line1 = `${directorName} ${profile.signature}.`;
+  const line2 = `${profile.focus} en ${highlight}, ${profile.texture}.`;
+  return `${line1}\n${line2}`;
+}
+
+function generateRatingFallback() {
+  // Rating aleatorio entre 7.5 y 9.5
+  return parseFloat((Math.random() * 2 + 7.5).toFixed(1));
 }
 
 async function buildDailyRecommendations() {
@@ -463,26 +556,28 @@ async function buildDailyRecommendations() {
       continue;
     }
 
-    let selectedMovies = [];
-    try {
-      selectedMovies = await geminiService.selectMoviesForCycle(director.name, candidateMovies);
-    } catch (error) {
-      console.error(`Error seleccionando películas para ${director.name}:`, error);
-      selectedMovies = candidateMovies.slice(0, 6);
-    }
+    // Seleccionar las mejores 6 películas basándose en popularidad y fecha
+    const selectedMovies = candidateMovies
+      .sort((a, b) => {
+        // Priorizar popularidad, luego fecha más reciente
+        if (b.popularity !== a.popularity) {
+          return (b.popularity || 0) - (a.popularity || 0);
+        }
+        const dateA = a.release_date ? new Date(a.release_date).getTime() : 0;
+        const dateB = b.release_date ? new Date(b.release_date).getTime() : 0;
+        return dateB - dateA;
+      })
+      .slice(0, 6);
 
     if (!selectedMovies || selectedMovies.length < 4) {
-      console.warn(`⚠️  Gemini no devolvió suficientes películas para ${director.name}.`);
+      console.warn(`⚠️  No se pudieron seleccionar suficientes películas para ${director.name}.`);
       continue;
     }
 
-    const finalMovies = selectedMovies.slice(0, 6);
-
-    const [cycleName, description, rating] = await Promise.all([
-      geminiService.generateCycleName(director.name, finalMovies),
-      geminiService.generateDescription(director.name, finalMovies),
-      geminiService.generateRating(director.name, finalMovies),
-    ]);
+    // Usar funciones de fallback (sin Gemini)
+    const cycleName = generateCycleNameFallback(director.name);
+    const description = generateDescriptionFallback(director.name, selectedMovies);
+    const rating = generateRatingFallback();
 
     recommendations.push({
       director: director.name,
@@ -492,7 +587,7 @@ async function buildDailyRecommendations() {
       cycleName,
       description,
       rating,
-      movies: finalMovies,
+      movies: selectedMovies,
     });
   }
 
