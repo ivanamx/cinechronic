@@ -146,6 +146,53 @@ export default function PlaylistsScreen() {
                   )}
                   <View style={styles.textContent}>
                     <Text style={styles.playlistName}>{item.name}</Text>
+                    
+                    {/* Lugar de nacimiento del director */}
+                    {(item as any).director?.placeOfBirth && (
+                      <View style={styles.infoRow}>
+                        <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                        <Text style={styles.infoText}>
+                          {(item as any).director.placeOfBirth}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {/* Timeline de películas */}
+                    {item.movies && item.movies.length > 0 && (() => {
+                      const years = item.movies
+                        .map((movie: any) => movie.year)
+                        .filter((year): year is number => year != null && !isNaN(year))
+                        .sort((a, b) => a - b);
+                      
+                      if (years.length > 0) {
+                        const yearRange = years.length === 1
+                          ? `${years[0]}`
+                          : `${years[0]} - ${years[years.length - 1]}`;
+                        
+                        return (
+                          <View style={styles.infoRow}>
+                            <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                            <Text style={styles.infoLabel}>Timeline:</Text>
+                            <Text style={styles.infoText}>{yearRange}</Text>
+                          </View>
+                        );
+                      }
+                      return null;
+                    })()}
+                    
+                    {/* Popularidad promedio */}
+                    {item.movies && item.movies.length > 0 && (() => {
+                      // Nota: La popularidad no viene en los datos del backend actualmente
+                      // Si se agrega en el futuro, se puede calcular aquí
+                      return null;
+                    })()}
+                    
+                    {/* Número de películas */}
+                    <Text style={styles.playlistMovies}>
+                      {item.movies?.length || 0} películas
+                    </Text>
+                    
+                    {/* Fecha programada */}
                     {item.scheduled_date && (() => {
                       try {
                         const date = new Date(item.scheduled_date + 'T00:00:00');
@@ -164,35 +211,7 @@ export default function PlaylistsScreen() {
                       }
                       return null;
                     })()}
-                    <Text style={styles.playlistMovies}>
-                      {item.movies?.length || 0} películas
-                    </Text>
                   </View>
-                  
-                  {item.movies && item.movies.length > 0 && (
-                    <View style={styles.postersContainer}>
-                      {item.movies.slice(0, 3).map((movie: any, index: number) => (
-                        <View key={movie.id || index} style={styles.posterWrapper}>
-                          {movie.poster ? (
-                            <Image
-                              source={{ uri: movie.poster }}
-                              style={styles.posterThumbnail}
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <View style={[styles.posterThumbnail, styles.posterPlaceholder]}>
-                              <Ionicons name="film-outline" size={16} color={colors.textMuted} />
-                            </View>
-                          )}
-                        </View>
-                      ))}
-                      {item.movies.length > 3 && (
-                        <View style={[styles.posterThumbnail, styles.morePostersOverlay]}>
-                          <Text style={styles.morePostersText}>+{item.movies.length - 3}</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
                 </View>
               </TouchableOpacity>
             </Swipeable>
@@ -272,58 +291,46 @@ const styles = StyleSheet.create({
   },
   textContent: {
     flex: 1,
-    marginRight: spacing.md,
   },
   playlistName: {
     ...typography.h4,
     color: colors.text,
+    marginBottom: spacing.sm,
+    fontWeight: '600',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     marginBottom: spacing.xs,
+  },
+  infoLabel: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  infoText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontSize: 12,
   },
   dateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
   },
   playlistDate: {
     ...typography.bodySmall,
     color: colors.accent,
+    fontSize: 12,
   },
   playlistMovies: {
-    ...typography.caption,
+    ...typography.bodySmall,
     color: colors.accent,
-  },
-  postersContainer: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    alignItems: 'center',
-  },
-  posterWrapper: {
-    marginLeft: -spacing.sm,
-  },
-  posterThumbnail: {
-    width: 45,
-    height: 65,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: colors.backgroundDark,
-  },
-  posterPlaceholder: {
-    backgroundColor: colors.backgroundLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  morePostersOverlay: {
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderColor: colors.primary,
-  },
-  morePostersText: {
-    ...typography.caption,
-    color: colors.text,
-    fontWeight: '600',
-    fontSize: 10,
+    fontWeight: '500',
+    marginTop: spacing.xs,
   },
   loadingText: {
     ...typography.body,

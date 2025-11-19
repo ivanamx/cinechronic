@@ -252,14 +252,9 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Director con lugar de nacimiento y botón Agregar */}
+      {/* Director con botón Agregar */}
       <View style={styles.recommendationDirectorRow}>
-        <View style={styles.recommendationDirectorInfo}>
-          <Text style={styles.recommendationDirector}>{item.director}</Text>
-          {item.placeOfBirth && (
-            <Text style={styles.recommendationPlaceOfBirth}>{item.placeOfBirth}</Text>
-          )}
-        </View>
+        <Text style={styles.recommendationDirector}>{directorLabel}</Text>
         <TouchableOpacity
           style={styles.addRecommendationBadge}
           onPress={() => handleAddRecommendation(item)}
@@ -272,7 +267,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Timeline, Popularidad y Número de películas */}
+      {/* Timeline y Popularidad */}
       <View style={styles.recommendationStatsContainer}>
         {yearRange && (
           <View style={styles.recommendationStatItem}>
@@ -288,12 +283,30 @@ export default function HomeScreen() {
             <Text style={styles.recommendationStatValue}>{avgPopularity}</Text>
           </View>
         )}
-        <View style={styles.recommendationStatItem}>
-          <Ionicons name="film-outline" size={14} color={colors.textSecondary} />
-          <Text style={styles.recommendationStatLabel}>Películas:</Text>
-          <Text style={styles.recommendationStatValue}>{item.movies.length}</Text>
-        </View>
       </View>
+
+      {/* Portadas de películas - Scroll horizontal con 4 visibles */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.recommendationPostersContainer}
+      >
+        {moviesToDisplay.map((movie, index) => (
+          <View key={movie.id || index} style={styles.recommendationPosterItem}>
+            {movie.poster ? (
+              <Image
+                source={{ uri: movie.poster }}
+                style={styles.recommendationPoster}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.recommendationPoster, styles.posterPlaceholder]}>
+                <Ionicons name="film-outline" size={20} color={colors.textMuted} />
+              </View>
+            )}
+          </View>
+        ))}
+      </ScrollView>
     </View>
     );
   }, [handleAddRecommendation, createPlaylistMutation.isPending]);
@@ -676,19 +689,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
-  recommendationDirectorInfo: {
-    flex: 1,
-  },
   recommendationDirector: {
     ...typography.bodySmall,
     color: colors.accent,
     fontWeight: '500',
-    marginBottom: spacing.xs / 2,
-  },
-  recommendationPlaceOfBirth: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    fontSize: 12,
+    flex: 1,
   },
   recommendationStatsContainer: {
     flexDirection: 'row',
@@ -712,6 +717,22 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 12,
     fontWeight: '600',
+  },
+  recommendationPostersContainer: {
+    paddingVertical: spacing.xs,
+    paddingBottom: spacing.xs / 2,
+    marginBottom: spacing.xs,
+  },
+  recommendationPosterItem: {
+    marginRight: spacing.sm,
+    width: (CARD_WIDTH - spacing.md * 2 - spacing.sm * 3) / 4, // 4 portadas visibles
+  },
+  recommendationPoster: {
+    width: '100%',
+    aspectRatio: 2 / 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   addRecommendationBadge: {
     flexDirection: 'row',
