@@ -131,88 +131,85 @@ export default function PlaylistsScreen() {
                 }}
                 activeOpacity={0.7}
               >
+                {/* Fecha en esquina superior derecha */}
+                {item.scheduled_date && (() => {
+                  try {
+                    const date = new Date(item.scheduled_date + 'T00:00:00');
+                    if (!isNaN(date.getTime())) {
+                      const day = String(date.getDate()).padStart(2, '0');
+                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                      const year = String(date.getFullYear()).slice(-2);
+                      return (
+                        <View style={styles.dateBadge}>
+                          <Text style={styles.dateBadgeText}>{day}/{month}/{year}</Text>
+                        </View>
+                      );
+                    }
+                  } catch (error) {
+                    console.error('Error formatting date:', error);
+                  }
+                  return null;
+                })()}
+                
                 <View style={styles.cardContent}>
-                  {(item as any).director?.profileUrl && (
+                  {/* Foto del director */}
+                  {(item as any).director?.profileUrl ? (
                     <Image
                       source={{ uri: (item as any).director.profileUrl }}
                       style={styles.directorPhoto}
                       resizeMode="cover"
                     />
-                  )}
-                  {!(item as any).director?.profileUrl && (
+                  ) : (
                     <View style={[styles.directorPhoto, styles.directorPhotoPlaceholder]}>
                       <Ionicons name="person-outline" size={20} color={colors.textMuted} />
                     </View>
                   )}
+                  
+                  {/* Contenido principal */}
                   <View style={styles.textContent}>
+                    {/* Primera fila: Nombre */}
                     <Text style={styles.playlistName}>{item.name}</Text>
                     
-                    {/* Lugar de nacimiento del director */}
-                    {(item as any).director?.placeOfBirth && (
-                      <View style={styles.infoRow}>
-                        <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                        <Text style={styles.infoText}>
-                          {(item as any).director.placeOfBirth}
-                        </Text>
-                      </View>
-                    )}
-                    
-                    {/* Timeline de películas */}
-                    {item.movies && item.movies.length > 0 && (() => {
-                      const years = item.movies
-                        .map((movie: any) => movie.year)
-                        .filter((year): year is number => year != null && !isNaN(year))
-                        .sort((a, b) => a - b);
-                      
-                      if (years.length > 0) {
-                        const yearRange = years.length === 1
-                          ? `${years[0]}`
-                          : `${years[0]} - ${years[years.length - 1]}`;
-                        
-                        return (
-                          <View style={styles.infoRow}>
-                            <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                            <Text style={styles.infoLabel}>Timeline:</Text>
-                            <Text style={styles.infoText}>{yearRange}</Text>
-                          </View>
-                        );
-                      }
-                      return null;
-                    })()}
-                    
-                    {/* Popularidad promedio */}
-                    {item.movies && item.movies.length > 0 && (() => {
-                      // Nota: La popularidad no viene en los datos del backend actualmente
-                      // Si se agrega en el futuro, se puede calcular aquí
-                      return null;
-                    })()}
-                    
-                    {/* Número de películas */}
+                    {/* Segunda fila: Número de películas */}
                     <Text style={styles.playlistMovies}>
                       {item.movies?.length || 0} películas
                     </Text>
-                    
-                    {/* Fecha programada */}
-                    {item.scheduled_date && (() => {
-                      try {
-                        const date = new Date(item.scheduled_date + 'T00:00:00');
-                        if (!isNaN(date.getTime())) {
-                          return (
-                            <View style={styles.dateContainer}>
-                              <Ionicons name="calendar-outline" size={14} color={colors.accent} />
-                              <Text style={styles.playlistDate}>
-                                {format(date, 'dd MMMM yyyy')}
-                              </Text>
-                            </View>
-                          );
-                        }
-                      } catch (error) {
-                        console.error('Error formatting date:', error);
-                      }
-                      return null;
-                    })()}
                   </View>
                 </View>
+                
+                {/* Fila aparte: Lugar de origen */}
+                {(item as any).director?.placeOfBirth && (
+                  <View style={styles.bottomInfoRow}>
+                    <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                    <Text style={styles.infoText}>
+                      {(item as any).director.placeOfBirth}
+                    </Text>
+                  </View>
+                )}
+                
+                {/* Fila aparte: Timeline */}
+                {item.movies && item.movies.length > 0 && (() => {
+                  const years = item.movies
+                    .map((movie: any) => movie.year)
+                    .filter((year): year is number => year != null && !isNaN(year))
+                    .sort((a, b) => a - b);
+                  
+                  if (years.length > 0) {
+                    const yearRange = years.length === 1
+                      ? `${years[0]}`
+                      : `${years[0]} - ${years[years.length - 1]}`;
+                    
+                    return (
+                      <View style={styles.bottomInfoRow}>
+                        <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                        <Text style={styles.infoLabel}>Timeline:</Text>
+                        <Text style={styles.infoText}>{yearRange}</Text>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
+                
               </TouchableOpacity>
             </Swipeable>
           )}
@@ -269,12 +266,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    position: 'relative',
+  },
+  dateBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    zIndex: 10,
+  },
+  dateBadgeText: {
+    ...typography.bodySmall,
+    color: colors.lime,
+    fontWeight: '600',
+    fontSize: 12,
   },
   cardContent: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     gap: spacing.md,
+    marginBottom: spacing.sm,
   },
   directorPhoto: {
     width: 50,
@@ -291,18 +301,22 @@ const styles = StyleSheet.create({
   },
   textContent: {
     flex: 1,
+    justifyContent: 'flex-start',
   },
   playlistName: {
     ...typography.h4,
     color: colors.text,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
     fontWeight: '600',
   },
-  infoRow: {
+  bottomInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   infoLabel: {
     ...typography.bodySmall,
@@ -330,7 +344,6 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.accent,
     fontWeight: '500',
-    marginTop: spacing.xs,
   },
   loadingText: {
     ...typography.body,

@@ -542,6 +542,22 @@ async function getDirectorMovies(directorId, directorName, options = {}) {
   }
 }
 
+// Países latinoamericanos
+const LATIN_AMERICAN_COUNTRIES = [
+  'Mexico', 'México', 'Argentina', 'Chile', 'Colombia', 'Brazil', 'Brasil',
+  'Peru', 'Perú', 'Venezuela', 'Uruguay', 'Paraguay', 'Ecuador', 'Bolivia',
+  'Cuba', 'Dominican Republic', 'Puerto Rico', 'Costa Rica', 'Panama', 'Panamá',
+  'Guatemala', 'Honduras', 'El Salvador', 'Nicaragua'
+];
+
+function isLatinAmerican(country) {
+  if (!country) return false;
+  const normalized = country.trim();
+  return LATIN_AMERICAN_COUNTRIES.some(
+    latamCountry => latamCountry.toLowerCase() === normalized.toLowerCase()
+  );
+}
+
 async function getDirectorCandidates(count = 4) {
   // Obtener directores populares de TMDB
   const allDirectors = await fetchPopularDirectors();
@@ -553,16 +569,60 @@ async function getDirectorCandidates(count = 4) {
     return [];
   }
 
-  // Mezclar aleatoriamente y seleccionar exactamente 'count' directores
-  const shuffled = [...allDirectors].sort(() => Math.random() - 0.5);
-  const selected = shuffled.slice(0, count);
+  // Obtener detalles de todos los directores para verificar países
+  const directorsWithDetails = [];
+  for (const director of allDirectors) {
+    const details = await fetchDirectorDetails(director.id);
+    if (details) {
+      directorsWithDetails.push({
+        ...director,
+        country: details.country,
+        placeOfBirth: details.placeOfBirth,
+      });
+    } else {
+      // Si no se pueden obtener detalles, incluir sin país
+      directorsWithDetails.push({
+        ...director,
+        country: null,
+        placeOfBirth: null,
+      });
+    }
+  }
+
+  // Separar directores latinoamericanos y no latinoamericanos
+  const latinAmericanDirectors = directorsWithDetails.filter(d => isLatinAmerican(d.country));
+  const otherDirectors = directorsWithDetails.filter(d => !isLatinAmerican(d.country));
+
+  console.log(`🌎 Directores latinoamericanos encontrados: ${latinAmericanDirectors.length}`);
+  console.log(`🌍 Otros directores: ${otherDirectors.length}`);
+
+  const selected = [];
   
-  console.log(`✅ Seleccionados ${selected.length} directores:`, selected.map(d => d.name));
+  // Garantizar que al menos uno sea latinoamericano
+  if (latinAmericanDirectors.length > 0) {
+    const shuffledLatin = [...latinAmericanDirectors].sort(() => Math.random() - 0.5);
+    selected.push(shuffledLatin[0]);
+    console.log(`✅ Director latinoamericano seleccionado: ${shuffledLatin[0].name} (${shuffledLatin[0].country})`);
+  } else {
+    console.warn('⚠️  No se encontraron directores latinoamericanos en los candidatos');
+  }
+
+  // Completar con otros directores aleatorios
+  const shuffledOthers = [...otherDirectors].sort(() => Math.random() - 0.5);
+  const remaining = count - selected.length;
+  for (let i = 0; i < remaining && i < shuffledOthers.length; i++) {
+    selected.push(shuffledOthers[i]);
+  }
+
+  // Mezclar el resultado final para que el latinoamericano no siempre esté primero
+  const finalSelected = selected.sort(() => Math.random() - 0.5).slice(0, count);
   
-  return selected;
+  console.log(`✅ Seleccionados ${finalSelected.length} directores:`, finalSelected.map(d => `${d.name}${d.country ? ` (${d.country})` : ''}`));
+  
+  return finalSelected;
 }
 
-// Funciones de fallback para nombre, descripción y rating (sin Gemini)
+// Funciones para nombre, descripción y rating
 function generateCycleNameFallback(directorName) {
   const lastName = directorName.split(' ').pop();
   const names = [
@@ -673,11 +733,27 @@ async function buildDailyRecommendations() {
       break;
     }
 
-    // Obtener detalles completos del director
-    const directorDetails = await fetchDirectorDetails(candidate.id);
-    if (!directorDetails) {
-      console.warn(`⚠️  No se pudieron obtener detalles para ${candidate.name}`);
-      continue;
+    // Usar detalles ya obtenidos en getDirectorCandidates, o obtenerlos si faltan
+    let directorDetails;
+    if (candidate.country !== undefined || candidate.placeOfBirth !== undefined) {
+      // Ya tenemos algunos detalles, obtener los completos (foto, etc.)
+      directorDetails = await fetchDirectorDetails(candidate.id);
+      // Si falla, usar los datos básicos que ya tenemos
+      if (!directorDetails) {
+        directorDetails = {
+          country: candidate.country || null,
+          placeOfBirth: candidate.placeOfBirth || null,
+          profilePath: null,
+          profileUrl: null,
+        };
+      }
+    } else {
+      // No tenemos detalles, obtenerlos ahora
+      directorDetails = await fetchDirectorDetails(candidate.id);
+      if (!directorDetails) {
+        console.warn(`⚠️  No se pudieron obtener detalles para ${candidate.name}`);
+        continue;
+      }
     }
 
     // Buscar películas del director
@@ -709,7 +785,7 @@ async function buildDailyRecommendations() {
       continue;
     }
 
-    // Usar funciones de fallback (sin Gemini)
+    // Generar nombre, descripción y rating
     const cycleName = generateCycleNameFallback(candidate.name);
     const description = generateDescriptionFallback(candidate.name, selectedMovies);
     const rating = generateRatingFallback();

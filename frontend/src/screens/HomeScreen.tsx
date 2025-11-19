@@ -198,18 +198,12 @@ export default function HomeScreen() {
   }, [createPlaylistMutation]);
 
   const renderRecommendationCard = useCallback(({ item }: { item: DirectorRecommendation }) => {
-    const moviesToDisplay = (item.movies || []).slice(0, 6);
+    const moviesToDisplay = item.movies || [];
     const directorLabel = item.directorCountry
       ? `${item.director} • ${item.directorCountry}`
       : item.director;
 
     console.log(`🎬 Renderizando card para ${item.director} con ${moviesToDisplay.length} películas`);
-
-    // Aceptar cards con al menos 3 películas
-    if (moviesToDisplay.length < 3) {
-      console.warn(`⚠️  Card de ${item.director} no se renderiza: solo tiene ${moviesToDisplay.length} películas`);
-      return null;
-    }
 
     // Calcular rango de años
     const years = item.movies
