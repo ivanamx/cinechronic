@@ -252,9 +252,14 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Director con botón Agregar */}
+      {/* Director con lugar de nacimiento y botón Agregar */}
       <View style={styles.recommendationDirectorRow}>
-        <Text style={styles.recommendationDirector}>{directorLabel}</Text>
+        <View style={styles.recommendationDirectorInfo}>
+          <Text style={styles.recommendationDirector}>{item.director}</Text>
+          {item.placeOfBirth && (
+            <Text style={styles.recommendationPlaceOfBirth}>{item.placeOfBirth}</Text>
+          )}
+        </View>
         <TouchableOpacity
           style={styles.addRecommendationBadge}
           onPress={() => handleAddRecommendation(item)}
@@ -267,7 +272,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Timeline y Popularidad */}
+      {/* Timeline, Popularidad y Número de películas */}
       <View style={styles.recommendationStatsContainer}>
         {yearRange && (
           <View style={styles.recommendationStatItem}>
@@ -283,30 +288,12 @@ export default function HomeScreen() {
             <Text style={styles.recommendationStatValue}>{avgPopularity}</Text>
           </View>
         )}
+        <View style={styles.recommendationStatItem}>
+          <Ionicons name="film-outline" size={14} color={colors.textSecondary} />
+          <Text style={styles.recommendationStatLabel}>Películas:</Text>
+          <Text style={styles.recommendationStatValue}>{item.movies.length}</Text>
+        </View>
       </View>
-
-      {/* Portadas de películas - Scroll horizontal con 4 visibles */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.recommendationPostersContainer}
-      >
-        {moviesToDisplay.map((movie, index) => (
-          <View key={movie.id || index} style={styles.recommendationPosterItem}>
-            {movie.poster ? (
-              <Image
-                source={{ uri: movie.poster }}
-                style={styles.recommendationPoster}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={[styles.recommendationPoster, styles.posterPlaceholder]}>
-                <Ionicons name="film-outline" size={20} color={colors.textMuted} />
-              </View>
-            )}
-          </View>
-        ))}
-      </ScrollView>
     </View>
     );
   }, [handleAddRecommendation, createPlaylistMutation.isPending]);
@@ -559,12 +546,12 @@ const styles = StyleSheet.create({
     maxWidth: 300,
   },
   topSection: {
-    flex: 0.4,
+    flex: 0.35,
     paddingTop: spacing.md,
   },
   bottomSection: {
-    flex: 0.6,
-    paddingTop: spacing.md,
+    flex: 0.65,
+    paddingTop: spacing.xs, // Reducido de md a xs
     paddingBottom: spacing.md,
   },
   scrollSection: {
@@ -618,7 +605,8 @@ const styles = StyleSheet.create({
   },
   recommendationsTitleContainer: {
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs / 2, // Reducido a la mitad
+    paddingTop: spacing.xs / 2, // Agregado para compensar
   },
   recommendationsContent: {
     flex: 1,
@@ -629,7 +617,7 @@ const styles = StyleSheet.create({
   carouselWrapper: {
     flex: 1,
     minHeight: 280,
-    marginTop: spacing.lg,
+    marginTop: spacing.sm, // Reducido de lg a sm
     // Asegurar que funcione en pantallas pequeñas
     maxHeight: '100%',
   },
@@ -688,11 +676,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
+  recommendationDirectorInfo: {
+    flex: 1,
+  },
   recommendationDirector: {
     ...typography.bodySmall,
     color: colors.accent,
     fontWeight: '500',
-    flex: 1,
+    marginBottom: spacing.xs / 2,
+  },
+  recommendationPlaceOfBirth: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontSize: 12,
   },
   recommendationStatsContainer: {
     flexDirection: 'row',
@@ -716,22 +712,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 12,
     fontWeight: '600',
-  },
-  recommendationPostersContainer: {
-    paddingVertical: spacing.xs,
-    paddingBottom: spacing.xs / 2,
-    marginBottom: spacing.xs,
-  },
-  recommendationPosterItem: {
-    marginRight: spacing.sm,
-    width: (CARD_WIDTH - spacing.md * 2 - spacing.sm * 3) / 4, // 4 portadas visibles
-  },
-  recommendationPoster: {
-    width: '100%',
-    aspectRatio: 2 / 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   addRecommendationBadge: {
     flexDirection: 'row',
