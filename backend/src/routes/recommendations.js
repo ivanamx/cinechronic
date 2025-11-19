@@ -145,39 +145,49 @@ async function fetchDirectorDetails(personId) {
   }
 }
 
-async function fetchTrendingDirectorNames(limit = 20) {
+async function fetchPopularDirectors() {
   try {
     const headers = TMDB_ACCESS_TOKEN
       ? { Authorization: `Bearer ${TMDB_ACCESS_TOKEN}`, accept: 'application/json' }
       : { accept: 'application/json' };
 
-    const url = TMDB_ACCESS_TOKEN
-      ? `${TMDB_BASE_URL}/trending/person/day?language=en-US`
-      : `${TMDB_BASE_URL}/trending/person/day?api_key=${TMDB_API_KEY}&language=en-US`;
+    // Obtener múltiples páginas para tener más opciones
+    const allDirectors = [];
+    const pagesToFetch = 3; // Obtener las primeras 3 páginas (60 personas aprox)
+    
+    for (let page = 1; page <= pagesToFetch; page++) {
+      const url = TMDB_ACCESS_TOKEN
+        ? `${TMDB_BASE_URL}/person/popular?language=en-US&page=${page}`
+        : `${TMDB_BASE_URL}/person/popular?api_key=${TMDB_API_KEY}&language=en-US&page=${page}`;
 
-    const response = await fetch(url, { headers });
-    if (!response.ok) {
-      throw new Error(`TMDB trending/person error: ${response.status}`);
-    }
+      const response = await fetch(url, { headers });
+      if (!response.ok) {
+        console.warn(`⚠️  Error en página ${page}: ${response.status}`);
+        continue;
+      }
 
-    const data = await response.json();
-    const names = [];
-    for (const person of data.results || []) {
-      if (
-        person &&
-        (person.known_for_department || '').toLowerCase() === 'directing' &&
-        person.name
-      ) {
-        names.push(person.name);
-        if (names.length >= limit) {
-          break;
+      const data = await response.json();
+      console.log(`📊 Página ${page}: ${data.results?.length || 0} resultados`);
+      
+      for (const person of data.results || []) {
+        if (
+          person &&
+          person.known_for_department === 'Directing' &&
+          person.name &&
+          person.id
+        ) {
+          allDirectors.push({
+            id: person.id,
+            name: person.name,
+          });
         }
       }
     }
 
-    return names;
+    console.log(`✅ Se encontraron ${allDirectors.length} directores en personas populares`);
+    return allDirectors;
   } catch (error) {
-    console.error('Error fetching trending directors:', error);
+    console.error('Error fetching popular directors:', error);
     return [];
   }
 }
@@ -417,17 +427,24 @@ async function getDirectorMovies(directorId, directorName, options = {}) {
   }
 }
 
-async function getDirectorNameCandidates(count = 4) {
-  // Obtener más directores de los que necesitamos para tener opciones
-  const allNames = await fetchTrendingDirectorNames(20);
+async function getDirectorCandidates(count = 4) {
+  // Obtener directores populares de TMDB
+  const allDirectors = await fetchPopularDirectors();
   
-  if (!allNames || allNames.length === 0) {
+  console.log(`🔍 getDirectorCandidates: se obtuvieron ${allDirectors?.length || 0} directores`);
+  
+  if (!allDirectors || allDirectors.length === 0) {
+    console.error('❌ No se obtuvieron directores');
     return [];
   }
 
   // Mezclar aleatoriamente y seleccionar exactamente 'count' directores
-  const shuffled = [...allNames].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  const shuffled = [...allDirectors].sort(() => Math.random() - 0.5);
+  const selected = shuffled.slice(0, count);
+  
+  console.log(`✅ Seleccionados ${selected.length} directores:`, selected.map(d => d.name));
+  
+  return selected;
 }
 
 // Funciones de fallback para nombre, descripción y rating (sin Gemini)
@@ -528,35 +545,38 @@ function generateRatingFallback() {
 }
 
 async function buildDailyRecommendations() {
-  const nameCandidates = await getDirectorNameCandidates(4);
+  const directorCandidates = await getDirectorCandidates(4);
 
-  if (!nameCandidates.length) {
+  if (!directorCandidates.length) {
     throw new Error('No se obtuvieron candidatos de directores.');
   }
 
   const recommendations = [];
 
-  for (const name of nameCandidates) {
+  for (const candidate of directorCandidates) {
     if (recommendations.length >= 4) {
       break;
     }
 
-    const director = await searchDirectorByName(name);
-    if (!director) {
+    // Obtener detalles completos del director
+    const directorDetails = await fetchDirectorDetails(candidate.id);
+    if (!directorDetails) {
+      console.warn(`⚠️  No se pudieron obtener detalles para ${candidate.name}`);
       continue;
     }
 
-    const candidateMovies = await getDirectorMovies(director.id, director.name, {
-      preferredMovies: director.knownForMovies,
-      limit: 12,
+    // Buscar películas del director
+    const candidateMovies = await getDirectorMovies(candidate.id, candidate.name, {
+      preferredMovies: [],
+      limit: 20, // Obtener más para tener opciones
     });
 
-    if (!candidateMovies || candidateMovies.length < 4) {
-      console.warn(`⚠️  Director ${director.name} no tiene suficientes películas candidatas.`);
+    if (!candidateMovies || candidateMovies.length === 0) {
+      console.warn(`⚠️  Director ${candidate.name} no tiene películas disponibles.`);
       continue;
     }
 
-    // Seleccionar las mejores 6 películas basándose en popularidad y fecha
+    // Seleccionar las mejores 4 películas basándose en popularidad y fecha
     const selectedMovies = candidateMovies
       .sort((a, b) => {
         // Priorizar popularidad, luego fecha más reciente
@@ -567,23 +587,23 @@ async function buildDailyRecommendations() {
         const dateB = b.release_date ? new Date(b.release_date).getTime() : 0;
         return dateB - dateA;
       })
-      .slice(0, 6);
+      .slice(0, 4); // Solo 4 películas
 
-    if (!selectedMovies || selectedMovies.length < 4) {
-      console.warn(`⚠️  No se pudieron seleccionar suficientes películas para ${director.name}.`);
+    if (!selectedMovies || selectedMovies.length === 0) {
+      console.warn(`⚠️  No se pudieron seleccionar películas para ${candidate.name}.`);
       continue;
     }
 
     // Usar funciones de fallback (sin Gemini)
-    const cycleName = generateCycleNameFallback(director.name);
-    const description = generateDescriptionFallback(director.name, selectedMovies);
+    const cycleName = generateCycleNameFallback(candidate.name);
+    const description = generateDescriptionFallback(candidate.name, selectedMovies);
     const rating = generateRatingFallback();
 
     recommendations.push({
-      director: director.name,
-      directorId: director.id,
-      directorCountry: director.country || null,
-      placeOfBirth: director.placeOfBirth || null,
+      director: candidate.name,
+      directorId: candidate.id,
+      directorCountry: directorDetails?.country || null,
+      placeOfBirth: directorDetails?.placeOfBirth || null,
       cycleName,
       description,
       rating,
@@ -591,8 +611,9 @@ async function buildDailyRecommendations() {
     });
   }
 
-  if (!recommendations.length) {
-    throw new Error('No se generaron recomendaciones de directores.');
+  // Si no hay suficientes recomendaciones, agregar mensaje
+  if (recommendations.length < 4) {
+    console.warn(`⚠️  Solo se generaron ${recommendations.length} recomendaciones de 4 esperadas`);
   }
 
   cachedRecommendations = recommendations;
@@ -626,7 +647,15 @@ router.get('/directors', async (req, res) => {
       await buildDailyRecommendations();
     }
 
-    res.json(cachedRecommendations);
+    // Si no hay suficientes recomendaciones, agregar mensaje
+    const response = {
+      recommendations: cachedRecommendations,
+      message: cachedRecommendations.length < 4 
+        ? 'Regresa más tarde para más recomendaciones' 
+        : null
+    };
+
+    res.json(response);
   } catch (error) {
     console.error('Error fetching director recommendations:', error);
     res.status(500).json({ message: 'Error fetching recommendations' });
