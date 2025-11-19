@@ -147,39 +147,77 @@ async function fetchDirectorDetails(personId) {
 
 async function fetchPopularDirectors() {
   try {
+    // Verificar que tengamos al menos una forma de autenticación
+    if (!TMDB_ACCESS_TOKEN && !TMDB_API_KEY) {
+      console.error('❌ No hay TMDB_ACCESS_TOKEN ni TMDB_API_KEY configurados');
+      return [];
+    }
+
+    // Construir headers y URL correctamente según la documentación de TMDB
     const headers = TMDB_ACCESS_TOKEN
-      ? { Authorization: `Bearer ${TMDB_ACCESS_TOKEN}`, accept: 'application/json' }
-      : { accept: 'application/json' };
+      ? { 
+          'Authorization': `Bearer ${TMDB_ACCESS_TOKEN}`, 
+          'accept': 'application/json' 
+        }
+      : { 
+          'accept': 'application/json' 
+        };
 
     // Obtener múltiples páginas para tener más opciones
     const allDirectors = [];
     const pagesToFetch = 3; // Obtener las primeras 3 páginas (60 personas aprox)
     
+    console.log(`🔑 Usando autenticación: ${TMDB_ACCESS_TOKEN ? 'Bearer Token' : 'API Key'}`);
+    if (TMDB_ACCESS_TOKEN) {
+      console.log(`🔑 Bearer Token (primeros 20 chars): ${TMDB_ACCESS_TOKEN.substring(0, 20)}...`);
+    }
+    if (TMDB_API_KEY) {
+      console.log(`🔑 API Key (primeros 10 chars): ${TMDB_API_KEY.substring(0, 10)}...`);
+    }
+    
     for (let page = 1; page <= pagesToFetch; page++) {
+      // Si usamos Bearer Token, no necesitamos api_key en la URL
+      // Si usamos API Key, debe ir en la URL como query parameter
       const url = TMDB_ACCESS_TOKEN
         ? `${TMDB_BASE_URL}/person/popular?language=en-US&page=${page}`
         : `${TMDB_BASE_URL}/person/popular?api_key=${TMDB_API_KEY}&language=en-US&page=${page}`;
 
+      console.log(`📡 Llamando a: ${url.substring(0, 50)}...`);
+      
       const response = await fetch(url, { headers });
+      
       if (!response.ok) {
-        console.warn(`⚠️  Error en página ${page}: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`❌ Error en página ${page}: ${response.status} - ${errorText}`);
         continue;
       }
 
       const data = await response.json();
       console.log(`📊 Página ${page}: ${data.results?.length || 0} resultados`);
       
+      // Debug: ver qué departamentos hay
+      if (page === 1 && data.results && data.results.length > 0) {
+        const departments = [...new Set(data.results.map(p => p.known_for_department).filter(Boolean))];
+        console.log(`📋 Departamentos encontrados en página 1: ${departments.join(', ')}`);
+      }
+      
       for (const person of data.results || []) {
-        if (
-          person &&
-          person.known_for_department === 'Directing' &&
-          person.name &&
-          person.id
-        ) {
+        if (!person || !person.name || !person.id) {
+          continue;
+        }
+        
+        // Verificar si es director - TMDB devuelve 'Directing' (con mayúscula)
+        const department = person.known_for_department || '';
+        const isDirector = department === 'Directing' || department.toLowerCase() === 'directing';
+        
+        if (isDirector) {
           allDirectors.push({
             id: person.id,
             name: person.name,
           });
+          if (allDirectors.length <= 5) { // Solo log los primeros 5 para no saturar
+            console.log(`  ✅ Director encontrado: ${person.name} (dept: ${department})`);
+          }
         }
       }
     }
