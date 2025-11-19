@@ -114,13 +114,33 @@ export default function HomeScreen() {
   });
 
   const validRecommendations = useMemo(() => {
-    if (!recommendations) return [];
-    return recommendations
-      .map((rec) => ({
-        ...rec,
-        movies: (rec.movies || []).slice(0, 6),
-      }))
-      .filter((rec) => rec.movies.length >= 4);
+    if (!recommendations) {
+      console.log('📋 No hay recomendaciones disponibles');
+      return [];
+    }
+    
+    console.log('📋 Recomendaciones recibidas:', recommendations.length);
+    
+    const processed = recommendations
+      .map((rec) => {
+        const movies = (rec.movies || []).slice(0, 6);
+        console.log(`📋 Director: ${rec.director}, Películas: ${movies.length}`);
+        return {
+          ...rec,
+          movies,
+        };
+      })
+      .filter((rec) => {
+        // Aceptar recomendaciones con al menos 3 películas (más flexible)
+        const hasEnoughMovies = rec.movies.length >= 3;
+        if (!hasEnoughMovies) {
+          console.log(`⚠️  Director ${rec.director} filtrado: solo tiene ${rec.movies.length} películas`);
+        }
+        return hasEnoughMovies;
+      });
+    
+    console.log('✅ Recomendaciones válidas:', processed.length);
+    return processed;
   }, [recommendations]);
 
   const createPlaylistMutation = useMutation({
@@ -183,7 +203,11 @@ export default function HomeScreen() {
       ? `${item.director} • ${item.directorCountry}`
       : item.director;
 
-    if (moviesToDisplay.length < 4) {
+    console.log(`🎬 Renderizando card para ${item.director} con ${moviesToDisplay.length} películas`);
+
+    // Aceptar cards con al menos 3 películas
+    if (moviesToDisplay.length < 3) {
+      console.warn(`⚠️  Card de ${item.director} no se renderiza: solo tiene ${moviesToDisplay.length} películas`);
       return null;
     }
 

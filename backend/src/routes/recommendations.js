@@ -587,7 +587,7 @@ async function buildDailyRecommendations() {
         const dateB = b.release_date ? new Date(b.release_date).getTime() : 0;
         return dateB - dateA;
       })
-      .slice(0, 4); // Solo 4 películas
+      .slice(0, 6); // Aumentar a 6 películas para tener más margen
 
     if (!selectedMovies || selectedMovies.length === 0) {
       console.warn(`⚠️  No se pudieron seleccionar películas para ${candidate.name}.`);
@@ -632,32 +632,41 @@ router.get('/directors', async (req, res) => {
       });
     }
 
+    console.log('🔍 Verificando si se deben generar nuevas recomendaciones...');
     if (shouldGenerateNewSet()) {
+      console.log('🔄 Generando nuevas recomendaciones del día...');
       try {
-        await buildDailyRecommendations();
+        const newRecommendations = await buildDailyRecommendations();
+        console.log(`✅ Se generaron ${newRecommendations?.length || 0} recomendaciones`);
       } catch (generationError) {
-        console.error('Error generando recomendaciones del día:', generationError);
+        console.error('❌ Error generando recomendaciones del día:', generationError);
         if (!cachedRecommendations) {
           return res.status(500).json({ message: 'No se pudieron generar recomendaciones en este momento.' });
         }
+        console.log('⚠️  Usando recomendaciones en caché debido al error');
       }
+    } else {
+      console.log('✅ Usando recomendaciones en caché');
     }
 
-    if (!cachedRecommendations) {
+    if (!cachedRecommendations || cachedRecommendations.length === 0) {
+      console.log('🔄 No hay caché, generando recomendaciones ahora...');
       await buildDailyRecommendations();
     }
 
+    console.log(`📤 Enviando ${cachedRecommendations?.length || 0} recomendaciones al frontend`);
+
     // Si no hay suficientes recomendaciones, agregar mensaje
     const response = {
-      recommendations: cachedRecommendations,
-      message: cachedRecommendations.length < 4 
+      recommendations: cachedRecommendations || [],
+      message: (cachedRecommendations?.length || 0) < 4 
         ? 'Regresa más tarde para más recomendaciones' 
         : null
     };
 
     res.json(response);
   } catch (error) {
-    console.error('Error fetching director recommendations:', error);
+    console.error('❌ Error fetching director recommendations:', error);
     res.status(500).json({ message: 'Error fetching recommendations' });
   }
 });
