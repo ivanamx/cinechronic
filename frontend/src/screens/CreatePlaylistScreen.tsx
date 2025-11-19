@@ -12,9 +12,10 @@ import { spacing } from '../theme/spacing';
 interface CreatePlaylistModalProps {
   visible: boolean;
   onClose: (created?: boolean) => void;
+  initialDirectorName?: string | null;
 }
 
-export default function CreatePlaylistModal({ visible, onClose }: CreatePlaylistModalProps) {
+export default function CreatePlaylistModal({ visible, onClose, initialDirectorName }: CreatePlaylistModalProps) {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -23,6 +24,21 @@ export default function CreatePlaylistModal({ visible, onClose }: CreatePlaylist
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Efecto para establecer el nombre inicial del director cuando se abre el modal
+  useEffect(() => {
+    if (visible && initialDirectorName) {
+      setName(initialDirectorName);
+    } else if (!visible) {
+      // Limpiar cuando se cierra el modal
+      setName('');
+      setSelectedDate(null);
+      setShowCalendar(false);
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [visible, initialDirectorName]);
 
   const createMutation = useMutation({
     mutationFn: () => playlistService.createPlaylist({ 
@@ -53,6 +69,10 @@ export default function CreatePlaylistModal({ visible, onClose }: CreatePlaylist
     setShowSuggestions(false);
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
+    }
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
     }
     onClose(false); // Pasar false para indicar que se canceló
   };
@@ -92,6 +112,11 @@ export default function CreatePlaylistModal({ visible, onClose }: CreatePlaylist
   }, [name]);
 
   const handleSelectDirector = (director: { id: number; name: string; profileUrl: string | null }) => {
+    // Cancelar el timeout del onBlur si existe
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
     setName(director.name);
     setShowSuggestions(false);
     setSuggestions([]);
@@ -149,7 +174,10 @@ export default function CreatePlaylistModal({ visible, onClose }: CreatePlaylist
                 }}
                 onBlur={() => {
                   // Delay para permitir que el touch en la sugerencia se registre
-                  setTimeout(() => setShowSuggestions(false), 200);
+                  blurTimeoutRef.current = setTimeout(() => {
+                    setShowSuggestions(false);
+                    blurTimeoutRef.current = null;
+                  }, 200);
                 }}
               />
               {isSearching && (
@@ -165,7 +193,8 @@ export default function CreatePlaylistModal({ visible, onClose }: CreatePlaylist
                   <TouchableOpacity
                     key={item.id.toString()}
                     style={styles.suggestionItem}
-                    onPress={() => handleSelectDirector(item)}
+                    onPressIn={() => handleSelectDirector(item)}
+                    activeOpacity={0.7}
                   >
                     {item.profileUrl ? (
                       <Image

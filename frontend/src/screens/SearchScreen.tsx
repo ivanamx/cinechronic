@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { movieService } from '../services/movieService';
+import { playlistService } from '../services/playlistService';
 import SelectPlaylistModal from '../components/SelectPlaylistModal';
 import CreatePlaylistModal from './CreatePlaylistScreen';
 import { colors } from '../theme/colors';
@@ -52,15 +53,23 @@ export default function SearchScreen() {
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [directors, setDirectors] = useState<any[]>([]);
+  const [directorMovies, setDirectorMovies] = useState<any[]>([]);
+  const [matchedDirector, setMatchedDirector] = useState<any | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedMovie, setSelectedMovie] = useState<any | null>(null);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showCreatePlaylistModal, setShowCreatePlaylistModal] = useState(false);
+  const [directorNameForCreate, setDirectorNameForCreate] = useState<string | null>(null);
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
     setErrorMessage(null);
+    setMatchedDirector(null);
+    setDirectorMovies([]);
+    setDirectors([]);
+    
     if (query.length < 2) {
       setSearchResults([]);
       return;
@@ -69,11 +78,51 @@ export default function SearchScreen() {
     setIsSearching(true);
     try {
       console.log('🔍 Buscando:', query);
-      const results = await movieService.searchMovies(query);
-      console.log('✅ Resultados encontrados:', results.length);
-      setSearchResults(results);
-      if (results.length === 0) {
-        setErrorMessage('No se encontraron películas');
+      
+      // Búsqueda paralela de películas y directores
+      const [moviesResults, directorsResults] = await Promise.all([
+        movieService.searchMovies(query).catch(err => {
+          console.error('Error searching movies:', err);
+          return [];
+        }),
+        playlistService.searchDirectors(query).catch(err => {
+          console.error('Error searching directors:', err);
+          return [];
+        })
+      ]);
+
+      console.log('✅ Películas encontradas:', moviesResults.length);
+      console.log('✅ Directores encontrados:', directorsResults.length);
+
+      setDirectors(directorsResults);
+      setSearchResults(moviesResults);
+
+      // Verificar si hay coincidencia exacta con algún director
+      const queryLower = query.toLowerCase().trim();
+      const exactMatch = directorsResults.find(
+        (director: any) => director.name.toLowerCase().trim() === queryLower
+      );
+
+      if (exactMatch) {
+        console.log('🎯 Coincidencia exacta con director:', exactMatch.name);
+        setMatchedDirector(exactMatch);
+        
+        // Obtener películas del director
+        try {
+          const movies = await playlistService.getDirectorMovies(exactMatch.id);
+          console.log('🎬 Películas del director:', movies.length);
+          setDirectorMovies(movies);
+        } catch (error) {
+          console.error('Error fetching director movies:', error);
+          setDirectorMovies([]);
+        }
+      } else {
+        setMatchedDirector(null);
+        setDirectorMovies([]);
+      }
+
+      if (moviesResults.length === 0 && directorsResults.length === 0 && !exactMatch) {
+        setErrorMessage('No se encontraron resultados');
       }
     } catch (error: any) {
       console.error('❌ Search error:', error);
@@ -91,17 +140,53 @@ export default function SearchScreen() {
       } else if (error.response?.status === 400) {
         setErrorMessage(error.response.data?.message || 'Búsqueda inválida');
       } else {
-        setErrorMessage(error.response?.data?.message || 'Error al buscar películas. Intenta de nuevo.');
+        setErrorMessage(error.response?.data?.message || 'Error al buscar. Intenta de nuevo.');
       }
       setSearchResults([]);
+      setDirectors([]);
     } finally {
       setIsSearching(false);
     }
   };
 
   const handleMoviePress = (movie: any) => {
-    navigation.navigate('MovieDetail' as never, { movie } as never);
+    (navigation as any).navigate('MovieDetail', { movie });
   };
+
+  const handleCreateCycleFromDirector = (director: any) => {
+    setDirectorNameForCreate(director.name);
+    setShowCreatePlaylistModal(true);
+  };
+
+  const renderDirectorItem = (director: any) => (
+    <View style={styles.directorCard}>
+      <View style={styles.directorCardContent}>
+        {director.profileUrl ? (
+          <Image
+            source={{ uri: director.profileUrl }}
+            style={styles.directorPhoto}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.directorPhotoPlaceholder}>
+            <Ionicons name="person-outline" size={40} color={colors.textMuted} />
+          </View>
+        )}
+        <View style={styles.directorInfo}>
+          <Text style={styles.directorName}>{director.name}</Text>
+          <Text style={styles.directorLabel}>Director</Text>
+        </View>
+      </View>
+      <TouchableOpacity
+        style={styles.createCycleButton}
+        onPress={() => handleCreateCycleFromDirector(director)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="add-circle" size={20} color={colors.lime} />
+        <Text style={styles.createCycleButtonText}>Crear Ciclo</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   const renderMovieItem = ({ item }: { item: any }) => (
     <View style={styles.movieCard}>
@@ -198,7 +283,7 @@ export default function SearchScreen() {
         <View style={styles.searchContainer}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar películas..."
+            placeholder="Buscar película o director..."
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={handleSearch}
@@ -220,13 +305,34 @@ export default function SearchScreen() {
       )}
 
       <FlatList
-        data={searchResults}
-        renderItem={renderMovieItem}
-        keyExtractor={(item) => item.id.toString()}
+        data={[
+          // Si hay director con coincidencia exacta, mostrarlo primero
+          ...(matchedDirector ? [{ type: 'director', data: matchedDirector }] : []),
+          // Películas del director si hay coincidencia exacta
+          ...(matchedDirector && directorMovies.length > 0 
+            ? directorMovies.map((movie: any) => ({ type: 'movie', data: movie }))
+            : []),
+          // Películas generales solo si NO hay coincidencia exacta con director
+          ...(!matchedDirector 
+            ? searchResults.map((movie: any) => ({ type: 'movie', data: movie }))
+            : [])
+        ]}
+        renderItem={({ item }) => {
+          if (item.type === 'director') {
+            return renderDirectorItem(item.data);
+          } else {
+            return renderMovieItem({ item: item.data });
+          }
+        }}
+        keyExtractor={(item, index) => 
+          item.type === 'director' 
+            ? `director-${item.data.id}` 
+            : `movie-${item.data.id}-${index}`
+        }
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           !isSearching && searchQuery.length >= 2 && !errorMessage ? (
-            <Text style={styles.emptyText}>No se encontraron películas</Text>
+            <Text style={styles.emptyText}>No se encontraron resultados</Text>
           ) : null
         }
       />
@@ -249,10 +355,12 @@ export default function SearchScreen() {
         visible={showCreatePlaylistModal}
         onClose={(created: boolean = false) => {
           setShowCreatePlaylistModal(false);
+          setDirectorNameForCreate(null);
           // Si se creó desde búsqueda, simplemente regresar a la pantalla de búsqueda
           // No abrir el modal de selección automáticamente
           // El usuario puede presionar el botón de agregar de nuevo si quiere agregar la película
         }}
+        initialDirectorName={directorNameForCreate}
       />
     </SafeAreaView>
   );
@@ -430,6 +538,67 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  directorCard: {
+    backgroundColor: colors.backgroundLight,
+    marginBottom: spacing.md,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+  },
+  directorCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  directorPhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    marginRight: spacing.md,
+  },
+  directorPhotoPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.backgroundDark,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  directorInfo: {
+    flex: 1,
+  },
+  directorName: {
+    ...typography.h4,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  directorLabel: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+  },
+  createCycleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary + '20',
+    padding: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    gap: spacing.xs,
+  },
+  createCycleButtonText: {
+    ...typography.bodySmall,
+    color: colors.lime,
+    fontWeight: '600',
   },
 });
 

@@ -9,28 +9,31 @@ import { spacing } from '../theme/spacing';
 
 export default function LoginScreen() {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
+  const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const { setUser } = useAuthStore();
 
   const handleSubmit = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
-      return;
-    }
-
-    if (!isLogin && !username) {
-      Alert.alert('Error', 'Por favor ingresa un nombre de usuario');
-      return;
+    if (isLogin) {
+      if (!emailOrUsername || !password) {
+        Alert.alert('Error', 'Por favor completa todos los campos');
+        return;
+      }
+    } else {
+      if (!email || !password || !username) {
+        Alert.alert('Error', 'Por favor completa todos los campos');
+        return;
+      }
     }
 
     setLoading(true);
     try {
       let result;
       if (isLogin) {
-        result = await authService.login(email, password);
+        result = await authService.login(emailOrUsername, password);
       } else {
         result = await authService.register(email, password, username);
       }
@@ -63,15 +66,26 @@ export default function LoginScreen() {
           />
         )}
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={colors.textSecondary}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+        {isLogin ? (
+          <TextInput
+            style={styles.input}
+            placeholder="Email o Usuario"
+            placeholderTextColor={colors.textSecondary}
+            value={emailOrUsername}
+            onChangeText={setEmailOrUsername}
+            autoCapitalize="none"
+          />
+        ) : (
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor={colors.textSecondary}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        )}
 
         <TextInput
           style={styles.input}
@@ -98,7 +112,14 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={styles.switchButton}
-          onPress={() => setIsLogin(!isLogin)}
+          onPress={() => {
+            setIsLogin(!isLogin);
+            // Limpiar campos al cambiar de modo
+            setEmailOrUsername('');
+            setEmail('');
+            setPassword('');
+            setUsername('');
+          }}
         >
           <Text style={styles.switchText}>
             {isLogin

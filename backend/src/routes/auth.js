@@ -68,7 +68,7 @@ router.post(
 router.post(
   '/login',
   [
-    body('email').isEmail().normalizeEmail(),
+    body('emailOrUsername').trim().notEmpty().withMessage('Email o username es requerido'),
     body('password').notEmpty(),
   ],
   async (req, res) => {
@@ -78,12 +78,12 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { email, password } = req.body;
+      const { emailOrUsername, password } = req.body;
 
-      // Find user
+      // Find user by email OR username
       const result = await pool.query(
-        'SELECT id, email, username, avatar, password_hash FROM users WHERE email = $1',
-        [email]
+        'SELECT id, email, username, avatar, password_hash FROM users WHERE email = $1 OR username = $1',
+        [emailOrUsername]
       );
 
       if (result.rows.length === 0) {

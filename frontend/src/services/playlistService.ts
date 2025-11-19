@@ -48,5 +48,11 @@ export const playlistService = {
     const response = await api.get(`/playlists/search/directors?query=${encodeURIComponent(query)}`);
     return response.data;
   },
+
+  // Obtener películas de un director
+  getDirectorMovies: async (directorId: number): Promise<any[]> => {
+    const response = await api.get(`/playlists/director/${directorId}/movies`);
+    return response.data;
+  },
 };
 

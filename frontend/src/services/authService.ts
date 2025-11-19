@@ -11,9 +11,9 @@ export const authService = {
     return { user, token };
   },
 
-  // Login
-  login: async (email: string, password: string): Promise<{ user: User; token: string }> => {
-    const response = await api.post('/auth/login', { email, password });
+  // Login (acepta email o username)
+  login: async (emailOrUsername: string, password: string): Promise<{ user: User; token: string }> => {
+    const response = await api.post('/auth/login', { emailOrUsername, password });
     const { token, user } = response.data;
     await AsyncStorage.setItem('authToken', token);
     return { user, token };

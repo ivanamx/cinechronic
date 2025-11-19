@@ -321,6 +321,103 @@ router.get('/search/directors', async (req, res) => {
   }
 });
 
+// Obtener películas de un director por su ID
+router.get('/director/:directorId/movies', async (req, res) => {
+  try {
+    const { directorId } = req.params;
+    
+    if (!directorId) {
+      return res.status(400).json({ message: 'Director ID is required' });
+    }
+
+    const headers = TMDB_ACCESS_TOKEN
+      ? { Authorization: `Bearer ${TMDB_ACCESS_TOKEN}`, accept: 'application/json' }
+      : { accept: 'application/json' };
+
+    // Obtener películas del director
+    const url = TMDB_ACCESS_TOKEN
+      ? `${TMDB_BASE_URL}/person/${directorId}/movie_credits?language=en-US`
+      : `${TMDB_BASE_URL}/person/${directorId}/movie_credits?api_key=${TMDB_API_KEY}&language=en-US`;
+
+    const response = await fetch(url, { headers });
+
+    if (!response.ok) {
+      throw new Error(`TMDB API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Filtrar solo películas donde el director fue director (no productor, escritor, etc.)
+    const directedMovies = (data.crew || [])
+      .filter(movie => {
+        if (!movie || !movie.id || !movie.poster_path) {
+          return false;
+        }
+        const job = (movie.job || '').toLowerCase();
+        const department = (movie.department || '').toLowerCase();
+        return job === 'director' && department === 'directing';
+      })
+      .sort((a, b) => {
+        // Ordenar por popularidad descendente, luego por fecha de lanzamiento
+        const popularityDiff = (b.popularity || 0) - (a.popularity || 0);
+        if (popularityDiff !== 0) return popularityDiff;
+        const dateA = a.release_date ? new Date(a.release_date).getTime() : 0;
+        const dateB = b.release_date ? new Date(b.release_date).getTime() : 0;
+        return dateB - dateA;
+      })
+      .slice(0, 20) // Limitar a 20 películas
+      .map(movie => {
+        // Normalizar formato de película para que sea consistente con searchMovies
+        return {
+          id: movie.id,
+          title: movie.title,
+          poster_path: movie.poster_path,
+          release_date: movie.release_date,
+          vote_average: movie.vote_average,
+          overview: movie.overview,
+          genre_ids: movie.genre_ids || [],
+          // Obtener runtime y director para las primeras 5 películas
+          runtime: null,
+          director: {
+            id: parseInt(directorId),
+            name: data.name || null
+          }
+        };
+      });
+
+    // Enriquecer las primeras 5 películas con runtime
+    const enrichedMovies = await Promise.all(
+      directedMovies.slice(0, 5).map(async (movie) => {
+        try {
+          const detailUrl = TMDB_ACCESS_TOKEN
+            ? `${TMDB_BASE_URL}/movie/${movie.id}?language=en-US`
+            : `${TMDB_BASE_URL}/movie/${movie.id}?api_key=${TMDB_API_KEY}&language=en-US`;
+          
+          const detailResponse = await fetch(detailUrl, { headers });
+          if (detailResponse.ok) {
+            const detailData = await detailResponse.json();
+            return {
+              ...movie,
+              runtime: detailData.runtime || null
+            };
+          }
+        } catch (error) {
+          console.error(`Error fetching details for movie ${movie.id}:`, error);
+        }
+        return movie;
+      })
+    );
+
+    // Combinar películas enriquecidas con el resto
+    const finalResults = [...enrichedMovies, ...directedMovies.slice(5)];
+    
+    res.json(finalResults);
+  } catch (error) {
+    console.error('Error fetching director movies:', error);
+    res.status(500).json({ message: 'Error fetching director movies' });
+  }
+});
+
 // Get all playlists for current user
 router.get('/', authenticateToken, async (req, res) => {
   try {
