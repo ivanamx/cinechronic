@@ -6,6 +6,7 @@ export interface RecommendationMovie {
   poster: string | null;
   release_date: string;
   overview: string;
+  popularity: number;
 }
 
 export interface DirectorRecommendation {
@@ -19,11 +20,21 @@ export interface DirectorRecommendation {
   movies: RecommendationMovie[];
 }
 
+export interface RecommendationsResponse {
+  recommendations: DirectorRecommendation[];
+  message?: string | null;
+}
+
 export const recommendationService = {
   // Obtener recomendaciones basadas en directores destacados
   getDirectorRecommendations: async (): Promise<DirectorRecommendation[]> => {
-    const response = await api.get('/recommendations/directors');
-    return response.data;
+    const response = await api.get<RecommendationsResponse>('/recommendations/directors');
+    // Si la respuesta tiene la estructura nueva con recommendations, usarla
+    // Si es un array directamente (compatibilidad), usarlo
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    return response.data.recommendations || [];
   },
 };
 

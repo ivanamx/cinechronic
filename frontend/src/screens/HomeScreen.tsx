@@ -187,6 +187,33 @@ export default function HomeScreen() {
       return null;
     }
 
+    // Calcular rango de años
+    const years = item.movies
+      .map(movie => {
+        if (movie.release_date) {
+          const year = new Date(movie.release_date).getFullYear();
+          return isNaN(year) ? null : year;
+        }
+        return null;
+      })
+      .filter((year): year is number => year !== null)
+      .sort((a, b) => a - b);
+
+    const yearRange = years.length > 0
+      ? years.length === 1
+        ? `${years[0]}`
+        : `${years[0]} - ${years[years.length - 1]}`
+      : null;
+
+    // Calcular popularidad promedio
+    const popularities = item.movies
+      .map(movie => movie.popularity)
+      .filter((pop): pop is number => typeof pop === 'number' && !isNaN(pop));
+    
+    const avgPopularity = popularities.length > 0
+      ? (popularities.reduce((sum, pop) => sum + pop, 0) / popularities.length).toFixed(1)
+      : null;
+
     return (
       <View style={[styles.recommendationCard, { width: CARD_WIDTH }]}>
       {/* Header con nombre del ciclo, total de películas y rating */}
@@ -216,10 +243,23 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Descripción */}
-      <Text style={styles.recommendationDescription} numberOfLines={2}>
-        {item.description}
-      </Text>
+      {/* Timeline y Popularidad */}
+      <View style={styles.recommendationStatsContainer}>
+        {yearRange && (
+          <View style={styles.recommendationStatItem}>
+            <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+            <Text style={styles.recommendationStatLabel}>Timeline:</Text>
+            <Text style={styles.recommendationStatValue}>{yearRange}</Text>
+          </View>
+        )}
+        {avgPopularity && (
+          <View style={styles.recommendationStatItem}>
+            <Ionicons name="trending-up-outline" size={14} color={colors.textSecondary} />
+            <Text style={styles.recommendationStatLabel}>Popularidad:</Text>
+            <Text style={styles.recommendationStatValue}>{avgPopularity}</Text>
+          </View>
+        )}
+      </View>
 
       {/* Portadas de películas - Scroll horizontal con 4 visibles */}
       <ScrollView
@@ -630,11 +670,28 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 1,
   },
-  recommendationDescription: {
+  recommendationStatsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  recommendationStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  recommendationStatLabel: {
     ...typography.bodySmall,
     color: colors.textSecondary,
-    lineHeight: 18,
-    marginBottom: spacing.md,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  recommendationStatValue: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
   },
   recommendationPostersContainer: {
     paddingVertical: spacing.xs,
