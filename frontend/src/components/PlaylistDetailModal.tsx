@@ -1,13 +1,17 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Image, ActivityIndicator, FlatList } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Image, ActivityIndicator, FlatList, Dimensions } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { format } from 'date-fns';
 import { playlistService } from '../services/playlistService';
 import { movieService } from '../services/movieService';
 import { ratingService } from '../services/ratingService';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH - (spacing.lg * 4);
 
 // Función para convertir nombre de país a código ISO
 const getCountryCode = (countryName: string | null | undefined): string | null => {
@@ -172,6 +176,18 @@ function MovieSynopsisContent({ movie }: { movie: any }) {
     enabled: !!movie.tmdbId,
   });
 
+  const { data: viewCount } = useQuery({
+    queryKey: ['movieViewCount', movie.id],
+    queryFn: () => movieService.getMovieViewCount(movie.id),
+    enabled: !!movie.id,
+  });
+
+  const { data: ratings, isLoading: ratingsLoading } = useQuery({
+    queryKey: ['movieRatings', movie.id],
+    queryFn: () => ratingService.getMovieRatings(movie.id),
+    enabled: !!movie.id,
+  });
+
   // Combinar todos los proveedores (flatrate tiene prioridad)
   const allProviders = [
     ...(watchProviders?.flatrate || []),
@@ -189,51 +205,145 @@ function MovieSynopsisContent({ movie }: { movie: any }) {
     (a.display_priority || 0) - (b.display_priority || 0)
   );
 
-  return (
-    <ScrollView style={styles.movieModalBody} showsVerticalScrollIndicator={false}>
-      <View style={styles.movieModalInfo}>
-        <Text style={styles.movieModalMovieTitle}>{movie.title}</Text>
-        <View style={styles.movieModalYearRow}>
-          {movie.year && (
-            <Text style={styles.movieModalYear}>{movie.year}</Text>
-          )}
-          <View style={styles.watchProvidersContainer}>
-            <Text style={styles.watchProvidersLabel}>Donde ver:</Text>
-            {providersLoading ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            ) : sortedProviders.length > 0 ? (
-              <View style={styles.providersLogosContainer}>
-                {sortedProviders
-                  .filter(provider => provider.logo_path) // Solo mostrar proveedores con logo
-                  .slice(0, 6)
-                  .map((provider) => (
-                    <Image
-                      key={provider.provider_id}
-                      source={{ 
-                        uri: `https://image.tmdb.org/t/p/w45${provider.logo_path}`
-                      }}
-                      style={styles.providerLogo}
-                      resizeMode="contain"
-                    />
-                  ))}
-              </View>
-            ) : null}
-          </View>
-        </View>
-      </View>
+  const formatDate = (dateValue: any) => {
+    if (!dateValue) return null;
+    try {
+      const date = typeof dateValue === 'string' 
+        ? new Date(dateValue.includes('T') ? dateValue : dateValue + 'T00:00:00')
+        : new Date(dateValue);
+      if (!isNaN(date.getTime())) {
+        return format(date, 'dd/MM/yy');
+      }
+    } catch (error) {
+      console.error('Error formatting date:', error);
+    }
+    return null;
+  };
 
-      {movie.synopsis ? (
-        <View style={styles.movieModalSynopsisContainer}>
-          <Text style={styles.movieModalSynopsis}>{movie.synopsis}</Text>
+  const cards = [
+    {
+      id: 'synopsis',
+      title: 'Sinopsis',
+      content: (
+        <View style={styles.cardContent}>
+          <View style={styles.movieModalInfo}>
+            <Text style={styles.movieModalMovieTitle}>{movie.title}</Text>
+            <View style={styles.movieModalYearRow}>
+              {movie.year && (
+                <Text style={styles.movieModalYear}>{movie.year}</Text>
+              )}
+              <View style={styles.watchProvidersContainer}>
+                <Text style={styles.watchProvidersLabel}>Donde ver:</Text>
+                {providersLoading ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : sortedProviders.length > 0 ? (
+                  <View style={styles.providersLogosContainer}>
+                    {sortedProviders
+                      .filter(provider => provider.logo_path)
+                      .slice(0, 6)
+                      .map((provider) => (
+                        <Image
+                          key={provider.provider_id}
+                          source={{ 
+                            uri: `https://image.tmdb.org/t/p/w45${provider.logo_path}`
+                          }}
+                          style={styles.providerLogo}
+                          resizeMode="contain"
+                        />
+                      ))}
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          {movie.synopsis ? (
+            <View style={styles.movieModalSynopsisContainer}>
+              <Text style={styles.movieModalSynopsis}>{movie.synopsis}</Text>
+            </View>
+          ) : (
+            <View style={styles.movieModalSynopsisContainer}>
+              <Text style={styles.movieModalNoSynopsis}>
+                No hay sinopsis disponible para esta película.
+              </Text>
+            </View>
+          )}
         </View>
-      ) : (
-        <View style={styles.movieModalSynopsisContainer}>
-          <Text style={styles.movieModalNoSynopsis}>
-            No hay sinopsis disponible para esta película.
-          </Text>
+      ),
+    },
+    {
+      id: 'ratings',
+      title: 'Calificaciones',
+      content: (
+        <View style={styles.cardContent}>
+          <View style={styles.ratingsHeader}>
+            <View style={styles.ratingsViewCountContainer}>
+              <Text style={styles.ratingsHeaderText}>Visto por</Text>
+              <Ionicons name="eye-outline" size={16} color={colors.textSecondary} />
+              <Text style={styles.ratingsViewCountText}>
+                {viewCount ? `${viewCount.viewCount}/${viewCount.totalUsers}` : '0/0'}
+              </Text>
+            </View>
+          </View>
+
+          {ratingsLoading ? (
+            <View style={styles.ratingsLoadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : ratings && ratings.length > 0 ? (
+            <ScrollView style={styles.ratingsList} showsVerticalScrollIndicator={false}>
+              {ratings.map((rating: any) => (
+                <View key={rating.id} style={styles.ratingListItem}>
+                  <View style={styles.ratingListItemHeader}>
+                    <Text style={styles.ratingListItemUsername}>
+                      {rating.username || 'Usuario'}
+                    </Text>
+                    <View style={styles.ratingListItemValue}>
+                      <Ionicons name="star" size={14} color={colors.accent} />
+                      <Text style={styles.ratingListItemRating}>{rating.rating}</Text>
+                    </View>
+                  </View>
+                  {rating.created_at && (
+                    <Text style={styles.ratingListItemDate}>
+                      {formatDate(rating.created_at)}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.noRatingsContainer}>
+              <Text style={styles.noRatingsText}>
+                Aún no hay calificaciones para esta película.
+              </Text>
+            </View>
+          )}
         </View>
-      )}
-    </ScrollView>
+      ),
+    },
+  ];
+
+  return (
+    <View style={styles.movieModalBody}>
+      <FlatList
+        data={cards}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={[styles.cardContainer, { width: CARD_WIDTH }]}>
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            {item.content}
+          </View>
+        )}
+        getItemLayout={(data, index) => ({
+          length: CARD_WIDTH,
+          offset: CARD_WIDTH * index,
+          index,
+        })}
+      />
+    </View>
   );
 }
 
@@ -607,6 +717,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 500,
     maxHeight: '80%',
+    minHeight: 400,
   },
   movieModalHeader: {
     flexDirection: 'row',
@@ -623,7 +734,20 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   movieModalBody: {
+    flex: 1,
+  },
+  cardContainer: {
     padding: spacing.lg,
+    height: '100%',
+  },
+  cardTitle: {
+    ...typography.h3,
+    color: colors.text,
+    fontWeight: '600',
+    marginBottom: spacing.md,
+  },
+  cardContent: {
+    flex: 1,
   },
   movieModalInfo: {
     marginBottom: spacing.md,
@@ -668,6 +792,84 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 4,
     backgroundColor: colors.backgroundLight,
+  },
+  ratingsHeader: {
+    marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  ratingsViewCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  ratingsHeaderText: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  ratingsViewCountText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  ratingsList: {
+    flex: 1,
+  },
+  ratingsLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  ratingListItem: {
+    backgroundColor: colors.backgroundLight,
+    padding: spacing.md,
+    borderRadius: 8,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  ratingListItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  ratingListItemUsername: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '600',
+    flex: 1,
+  },
+  ratingListItemValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+  },
+  ratingListItemRating: {
+    ...typography.bodySmall,
+    color: colors.accent,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  ratingListItemDate: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 11,
+  },
+  noRatingsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  noRatingsText: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   movieModalSynopsisContainer: {
     marginTop: spacing.md,
