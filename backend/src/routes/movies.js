@@ -265,6 +265,59 @@ router.get('/tmdb/:tmdbId', async (req, res) => {
   }
 });
 
+// Get watch providers for a movie from TMDB (solo México - MX)
+router.get('/tmdb/:tmdbId/watch-providers', async (req, res) => {
+  try {
+    const { tmdbId } = req.params;
+
+    if (!TMDB_ACCESS_TOKEN && !TMDB_API_KEY) {
+      return res.status(500).json({ message: 'TMDB authentication not configured. Add TMDB_ACCESS_TOKEN or TMDB_API_KEY to .env' });
+    }
+
+    // Usar Bearer Token si está disponible (método recomendado), sino usar API Key
+    const headers = TMDB_ACCESS_TOKEN
+      ? { 'Authorization': `Bearer ${TMDB_ACCESS_TOKEN}`, 'accept': 'application/json' }
+      : { 'accept': 'application/json' };
+
+    // Obtener watch providers con región MX (México)
+    const url = TMDB_ACCESS_TOKEN
+      ? `${TMDB_BASE_URL}/movie/${tmdbId}/watch/providers?watch_region=MX`
+      : `${TMDB_BASE_URL}/movie/${tmdbId}/watch/providers?api_key=${TMDB_API_KEY}&watch_region=MX`;
+
+    const response = await fetch(url, { headers });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return res.status(response.status).json({ message: errorData.status_message || 'Watch providers not found' });
+    }
+
+    const data = await response.json();
+    
+    // Extraer solo el objeto MX de la respuesta
+    const mxProviders = data.results && data.results.MX ? data.results.MX : null;
+    
+    if (!mxProviders) {
+      return res.json({ 
+        link: null,
+        flatrate: [],
+        rent: [],
+        buy: []
+      });
+    }
+
+    // Devolver solo los datos de México
+    res.json({
+      link: mxProviders.link || null,
+      flatrate: mxProviders.flatrate || [],
+      rent: mxProviders.rent || [],
+      buy: mxProviders.buy || []
+    });
+  } catch (error) {
+    console.error('Error fetching watch providers:', error);
+    res.status(500).json({ message: 'Error fetching watch providers' });
+  }
+});
+
 
 module.exports = router;
 

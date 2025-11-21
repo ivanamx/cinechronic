@@ -35,5 +35,36 @@ export const movieService = {
     const response = await api.get('/movies');
     return response.data;
   },
+
+  // Obtener watch providers de una película (solo México - MX)
+  getWatchProviders: async (tmdbId: number): Promise<{
+    link: string | null;
+    flatrate: Array<{
+      logo_path: string | null;
+      provider_id: number;
+      provider_name: string;
+      display_priority: number;
+    }>;
+    rent: Array<{
+      logo_path: string | null;
+      provider_id: number;
+      provider_name: string;
+      display_priority: number;
+    }>;
+    buy: Array<{
+      logo_path: string | null;
+      provider_id: number;
+      provider_name: string;
+      display_priority: number;
+    }>;
+  }> => {
+    try {
+      const response = await api.get(`/movies/tmdb/${tmdbId}/watch-providers`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching watch providers:', error);
+      throw error;
+    }
+  },
 };
 

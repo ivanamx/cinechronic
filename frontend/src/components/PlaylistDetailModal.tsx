@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Image, Act
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { playlistService } from '../services/playlistService';
+import { movieService } from '../services/movieService';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
@@ -83,6 +84,79 @@ const getCountryCode = (countryName: string | null | undefined): string | null =
   
   return normalized.toUpperCase();
 };
+
+// Componente para el contenido del modal de sinopsis con watch providers
+function MovieSynopsisContent({ movie }: { movie: any }) {
+  const { data: watchProviders, isLoading: providersLoading } = useQuery({
+    queryKey: ['watchProviders', movie.tmdbId],
+    queryFn: () => movieService.getWatchProviders(movie.tmdbId),
+    enabled: !!movie.tmdbId,
+  });
+
+  // Combinar todos los proveedores (flatrate tiene prioridad)
+  const allProviders = [
+    ...(watchProviders?.flatrate || []),
+    ...(watchProviders?.rent || []),
+    ...(watchProviders?.buy || []),
+  ];
+
+  // Eliminar duplicados por provider_id
+  const uniqueProviders = allProviders.filter((provider, index, self) =>
+    index === self.findIndex((p) => p.provider_id === provider.provider_id)
+  );
+
+  // Ordenar por display_priority
+  const sortedProviders = uniqueProviders.sort((a, b) => 
+    (a.display_priority || 0) - (b.display_priority || 0)
+  );
+
+  return (
+    <ScrollView style={styles.movieModalBody} showsVerticalScrollIndicator={false}>
+      <View style={styles.movieModalInfo}>
+        <Text style={styles.movieModalMovieTitle}>{movie.title}</Text>
+        <View style={styles.movieModalYearRow}>
+          {movie.year && (
+            <Text style={styles.movieModalYear}>{movie.year}</Text>
+          )}
+          <View style={styles.watchProvidersContainer}>
+            <Text style={styles.watchProvidersLabel}>Donde ver:</Text>
+            {providersLoading ? (
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            ) : sortedProviders.length > 0 ? (
+              <View style={styles.providersLogosContainer}>
+                {sortedProviders
+                  .filter(provider => provider.logo_path) // Solo mostrar proveedores con logo
+                  .slice(0, 6)
+                  .map((provider) => (
+                    <Image
+                      key={provider.provider_id}
+                      source={{ 
+                        uri: `https://image.tmdb.org/t/p/w45${provider.logo_path}`
+                      }}
+                      style={styles.providerLogo}
+                      resizeMode="contain"
+                    />
+                  ))}
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </View>
+
+      {movie.synopsis ? (
+        <View style={styles.movieModalSynopsisContainer}>
+          <Text style={styles.movieModalSynopsis}>{movie.synopsis}</Text>
+        </View>
+      ) : (
+        <View style={styles.movieModalSynopsisContainer}>
+          <Text style={styles.movieModalNoSynopsis}>
+            No hay sinopsis disponible para esta película.
+          </Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
 
 interface PlaylistDetailModalProps {
   visible: boolean;
@@ -238,26 +312,9 @@ export default function PlaylistDetailModal({ visible, onClose, playlistId }: Pl
             </View>
 
             {selectedMovie && (
-              <ScrollView style={styles.movieModalBody} showsVerticalScrollIndicator={false}>
-                <View style={styles.movieModalInfo}>
-                  <Text style={styles.movieModalMovieTitle}>{selectedMovie.title}</Text>
-                  {selectedMovie.year && (
-                    <Text style={styles.movieModalYear}>{selectedMovie.year}</Text>
-                  )}
-                </View>
-
-                {selectedMovie.synopsis ? (
-                  <View style={styles.movieModalSynopsisContainer}>
-                    <Text style={styles.movieModalSynopsis}>{selectedMovie.synopsis}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.movieModalSynopsisContainer}>
-                    <Text style={styles.movieModalNoSynopsis}>
-                      No hay sinopsis disponible para esta película.
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
+              <MovieSynopsisContent 
+                movie={selectedMovie}
+              />
             )}
           </View>
         </View>
@@ -391,14 +448,14 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   carouselPoster: {
-    width: 120,
-    height: 180,
+    width: 100,
+    height: 150,
     borderRadius: 12,
     borderWidth: 2,
     borderColor: colors.border,
     // Responsive: ajustar para pantallas pequeñas
-    minWidth: 80,
-    minHeight: 120,
+    minWidth: 70,
+    minHeight: 105,
   },
   posterPlaceholder: {
     backgroundColor: colors.backgroundLight,
@@ -453,9 +510,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
+  movieModalYearRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
   movieModalYear: {
     ...typography.body,
     color: colors.textSecondary,
+  },
+  watchProvidersContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexShrink: 1,
+  },
+  watchProvidersLabel: {
+    ...typography.bodySmall,
+    color: colors.lime,
+    fontSize: 12,
+  },
+  providersLogosContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+  },
+  providerLogo: {
+    width: 30,
+    height: 30,
+    borderRadius: 4,
+    backgroundColor: colors.backgroundLight,
   },
   movieModalSynopsisContainer: {
     marginTop: spacing.md,
@@ -464,6 +552,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     lineHeight: 24,
+    textAlign: 'justify',
   },
   movieModalNoSynopsis: {
     ...typography.body,

@@ -418,29 +418,30 @@ export default function HomeScreen() {
                       )}
                       <View style={styles.cycleNameContainer}>
                         <View style={styles.cycleNameRow}>
-                          <Text style={styles.cycleName}>{playlist.name}</Text>
-                          {countryCode && (
-                            <Text style={styles.cycleCountryCode}>{countryCode}</Text>
-                          )}
+                          <View style={styles.cycleNameAndCountry}>
+                            <Text style={styles.cycleName}>{playlist.name}</Text>
+                            {countryCode && (
+                              <Text style={styles.cycleCountryCode}>{countryCode}</Text>
+                            )}
+                          </View>
+                          <Text style={styles.cycleMoviesCount}>
+                            {playlist.movies?.length || 0} películas
+                          </Text>
                         </View>
-                        <Text style={styles.cycleMoviesCount}>
-                          {playlist.movies?.length || 0} películas
-                        </Text>
-                        <View style={styles.progressIndicator}>
-                          <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
-                          <Text style={styles.progressText}>3/5</Text>
+                        <View style={styles.progressAndUserRow}>
+                          <View style={styles.progressIndicator}>
+                            <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
+                            <Text style={styles.progressText}>3/5</Text>
+                          </View>
+                          {createdByUser?.username && (
+                            <View style={styles.userBadge}>
+                              <Ionicons name="person-circle-outline" size={12} color={colors.textSecondary} />
+                              <Text style={styles.userBadgeText}>{createdByUser.username}</Text>
+                            </View>
+                          )}
                         </View>
                       </View>
                     </View>
-                    {/* Fila con nombre de usuario */}
-                    {createdByUser?.username && (
-                      <View style={styles.userRow}>
-                        <View style={styles.userBadge}>
-                          <Ionicons name="person-circle-outline" size={12} color={colors.textSecondary} />
-                          <Text style={styles.userBadgeText}>{createdByUser.username}</Text>
-                        </View>
-                      </View>
-                    )}
                   </TouchableOpacity>
                 );
                 })
@@ -767,9 +768,17 @@ const styles = StyleSheet.create({
   },
   cycleNameRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: spacing.sm,
+  },
+  cycleNameAndCountry: {
+    flexDirection: 'row',
     alignItems: 'baseline',
     gap: spacing.xs,
     flexWrap: 'wrap',
+    flex: 1,
   },
   cycleName: {
     ...typography.h4,
@@ -785,22 +794,25 @@ const styles = StyleSheet.create({
   cycleMoviesCount: {
     ...typography.bodySmall,
     color: colors.textSecondary,
+  },
+  progressAndUserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
     marginTop: spacing.xs / 2,
+    gap: spacing.sm,
   },
   progressIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs / 2,
-    marginTop: spacing.xs / 2,
   },
   progressText: {
     ...typography.bodySmall,
     color: colors.accent,
     fontSize: 12,
     fontWeight: '500',
-  },
-  userRow: {
-    marginTop: spacing.xs,
   },
   userBadge: {
     flexDirection: 'row',
