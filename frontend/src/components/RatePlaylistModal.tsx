@@ -19,6 +19,7 @@ export default function RatePlaylistModal({ visible, onClose, playlistId }: Rate
   const queryClient = useQueryClient();
   const [ratings, setRatings] = useState<{ [movieId: string]: number }>({});
   const [previewRatings, setPreviewRatings] = useState<{ [movieId: string]: number }>({});
+  const [submittedMovies, setSubmittedMovies] = useState<Set<string>>(new Set());
 
   const { data: playlist, isLoading } = useQuery({
     queryKey: ['playlist', playlistId],
@@ -39,44 +40,6 @@ export default function RatePlaylistModal({ visible, onClose, playlistId }: Rate
     }
   }, [playlist]);
 
-  const rateAllMutation = useMutation({
-    mutationFn: async () => {
-      if (!playlist?.movies) return;
-      
-      const promises = playlist.movies.map(async (movie: any) => {
-        const rating = ratings[movie.id] || 5.0;
-        // Redondear a 1 decimal y convertir a número entero (multiplicar por 10)
-        const roundedRating = Math.round(rating * 10) / 10;
-        // El backend espera un número entero del 1 al 10, así que redondeamos
-        const finalRating = Math.round(roundedRating);
-        // Asegurar que movieId sea string
-        const movieId = String(movie.id);
-        
-        console.log('📊 Enviando calificación:', {
-          movieId,
-          movieTitle: movie.title,
-          rating: finalRating,
-          originalRating: rating,
-        });
-        
-        return ratingService.rateMovie(movieId, finalRating);
-      });
-      
-      await Promise.all(promises);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ratings'] });
-      onClose();
-    },
-    onError: (error: any) => {
-      console.error('❌ Error al calificar películas:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
-    },
-  });
 
   const updateRating = (movieId: string, value: number) => {
     // Asegurar que el valor esté entre 1 y 10
@@ -156,71 +119,31 @@ export default function RatePlaylistModal({ visible, onClose, playlistId }: Rate
           ) : playlist?.movies && playlist.movies.length > 0 ? (
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
               {playlist.movies.map((movie: any, index: number) => (
-                <View key={movie.id || index} style={styles.movieItem}>
-                  <View style={styles.movieRow}>
-                    {movie.poster ? (
-                      <Image
-                        source={{ uri: movie.poster }}
-                        style={styles.moviePoster}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[styles.moviePoster, styles.posterPlaceholder]}>
-                        <Ionicons name="film-outline" size={24} color={colors.textMuted} />
-                      </View>
-                    )}
-                    <View style={styles.movieInfoContainer}>
-                      <View style={styles.movieTitleRow}>
-                        <Text style={styles.movieTitle} numberOfLines={1}>
-                          {movie.title}
-                          {movie.year && (
-                            <Text style={styles.movieYear}>
-                              {' • '}{movie.year}
-                            </Text>
-                          )}
-                        </Text>
-                        <Text style={styles.ratingLabel}>
-                          {(previewRatings[movie.id] ?? ratings[movie.id] ?? 5.0).toFixed(1)}
-                        </Text>
-                      </View>
-                      <View style={styles.ratingContainer}>
-                        <Slider
-                          value={ratings[movie.id] || 5.0}
-                          onValueChange={(value) => updateRating(movie.id, value)}
-                          onValueChangePreview={(value) => {
-                            setPreviewRatings((prev) => ({
-                              ...prev,
-                              [movie.id]: value,
-                            }));
-                          }}
-                          onValueChangeEnd={() => {
-                            setPreviewRatings((prev) => {
-                              const newPreview = { ...prev };
-                              delete newPreview[movie.id];
-                              return newPreview;
-                            });
-                          }}
-                          minimumValue={1}
-                          maximumValue={10}
-                          step={0.1}
-                        />
-                      </View>
-                    </View>
-                  </View>
-                </View>
+                <MovieRatingItem
+                  key={movie.id || index}
+                  movie={movie}
+                  rating={ratings[movie.id] || 5.0}
+                  previewRating={previewRatings[movie.id]}
+                  onRatingChange={(value) => updateRating(movie.id, value)}
+                  onPreviewChange={(value) => {
+                    setPreviewRatings((prev) => ({
+                      ...prev,
+                      [movie.id]: value,
+                    }));
+                  }}
+                  onPreviewEnd={() => {
+                    setPreviewRatings((prev) => {
+                      const newPreview = { ...prev };
+                      delete newPreview[movie.id];
+                      return newPreview;
+                    });
+                  }}
+                  isSubmitted={submittedMovies.has(movie.id)}
+                  onSubmitted={(movieId) => {
+                    setSubmittedMovies((prev) => new Set(prev).add(movieId));
+                  }}
+                />
               ))}
-
-              <TouchableOpacity
-                style={[styles.submitButton, rateAllMutation.isPending && styles.submitButtonDisabled]}
-                onPress={() => rateAllMutation.mutate()}
-                disabled={rateAllMutation.isPending}
-              >
-                {rateAllMutation.isPending ? (
-                  <ActivityIndicator size="small" color={colors.background} />
-                ) : (
-                  <Text style={styles.submitButtonText}>Calificar</Text>
-                )}
-              </TouchableOpacity>
             </ScrollView>
           ) : (
             <View style={styles.emptyContainer}>
@@ -230,6 +153,114 @@ export default function RatePlaylistModal({ visible, onClose, playlistId }: Rate
         </View>
       </View>
     </Modal>
+  );
+}
+
+// Componente para cada item de calificación de película
+function MovieRatingItem({
+  movie,
+  rating,
+  previewRating,
+  onRatingChange,
+  onPreviewChange,
+  onPreviewEnd,
+  isSubmitted,
+  onSubmitted,
+}: {
+  movie: any;
+  rating: number;
+  previewRating?: number;
+  onRatingChange: (value: number) => void;
+  onPreviewChange: (value: number) => void;
+  onPreviewEnd: () => void;
+  isSubmitted: boolean;
+  onSubmitted: (movieId: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const rateMovieMutation = useMutation({
+    mutationFn: async (ratingValue: number) => {
+      // Redondear a 1 decimal y convertir a número entero
+      const roundedRating = Math.round(ratingValue * 10) / 10;
+      const finalRating = Math.round(roundedRating);
+      const movieIdString = String(movie.id);
+      
+      return ratingService.rateMovie(movieIdString, finalRating);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ratings'] });
+      queryClient.invalidateQueries({ queryKey: ['movieViewCount', movie.id] });
+      onSubmitted(movie.id);
+    },
+    onError: (error: any) => {
+      console.error('❌ Error al calificar película:', error);
+    },
+  });
+
+  const handleSubmit = () => {
+    rateMovieMutation.mutate(rating);
+  };
+
+  return (
+    <View style={styles.movieItem}>
+      <View style={styles.movieRow}>
+        {movie.poster ? (
+          <Image
+            source={{ uri: movie.poster }}
+            style={styles.moviePoster}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[styles.moviePoster, styles.posterPlaceholder]}>
+            <Ionicons name="film-outline" size={24} color={colors.textMuted} />
+          </View>
+        )}
+        <View style={styles.movieInfoContainer}>
+          <View style={styles.movieTitleRow}>
+            <Text style={styles.movieTitle} numberOfLines={1}>
+              {movie.title}
+              {movie.year && (
+                <Text style={styles.movieYear}>
+                  {' • '}{movie.year}
+                </Text>
+              )}
+            </Text>
+            <Text style={styles.ratingLabel}>
+              {(previewRating ?? rating).toFixed(1)}
+            </Text>
+          </View>
+          <View style={styles.ratingContainer}>
+            <Slider
+              value={rating}
+              onValueChange={onRatingChange}
+              onValueChangePreview={onPreviewChange}
+              onValueChangeEnd={onPreviewEnd}
+              minimumValue={1}
+              maximumValue={10}
+              step={0.1}
+            />
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.submitButtonIndividual,
+              (rateMovieMutation.isPending || isSubmitted) && styles.submitButtonDisabled,
+            ]}
+            onPress={handleSubmit}
+            disabled={rateMovieMutation.isPending || isSubmitted}
+          >
+            {rateMovieMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.background} />
+            ) : isSubmitted ? (
+              <View style={styles.submittedContainer}>
+                <Ionicons name="checkmark-circle" size={16} color={colors.background} />
+                <Text style={styles.submitButtonTextIndividual}>Enviado</Text>
+              </View>
+            ) : (
+              <Text style={styles.submitButtonTextIndividual}>Enviar</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -522,21 +553,28 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 10,
   },
-  submitButton: {
+  submitButtonIndividual: {
     backgroundColor: colors.lime,
-    padding: spacing.md,
-    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
     alignItems: 'center',
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
   },
   submitButtonDisabled: {
     opacity: 0.6,
   },
-  submitButtonText: {
-    ...typography.h4,
+  submitButtonTextIndividual: {
+    ...typography.bodySmall,
     color: colors.background,
     fontWeight: '600',
+    fontSize: 12,
+  },
+  submittedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
   },
   emptyContainer: {
     padding: spacing.xl,

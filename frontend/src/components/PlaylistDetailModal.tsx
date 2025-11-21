@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { playlistService } from '../services/playlistService';
 import { movieService } from '../services/movieService';
+import { ratingService } from '../services/ratingService';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
@@ -84,6 +85,84 @@ const getCountryCode = (countryName: string | null | undefined): string | null =
   
   return normalized.toUpperCase();
 };
+
+// Componente para cada poster de película con conteo de vistas
+function MoviePosterItem({ movie, onPress }: { movie: any; onPress: () => void }) {
+  const { data: viewCount, isLoading: viewCountLoading } = useQuery({
+    queryKey: ['movieViewCount', movie.id],
+    queryFn: () => movieService.getMovieViewCount(movie.id),
+    enabled: !!movie.id,
+  });
+
+  const { data: ratings, isLoading: ratingsLoading } = useQuery({
+    queryKey: ['movieRatings', movie.id],
+    queryFn: () => ratingService.getMovieRatings(movie.id),
+    enabled: !!movie.id,
+  });
+
+  const hasMultipleRatings = (ratings?.length || 0) > 1;
+
+  return (
+    <View style={styles.posterItemContainer}>
+      <TouchableOpacity
+        style={styles.posterItem}
+        onPress={onPress}
+        activeOpacity={0.7}
+      >
+        {movie.poster ? (
+          <Image
+            source={{ uri: movie.poster }}
+            style={styles.carouselPoster}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[styles.carouselPoster, styles.posterPlaceholder]}>
+            <Ionicons name="film-outline" size={32} color={colors.textMuted} />
+          </View>
+        )}
+      </TouchableOpacity>
+      <View style={styles.viewCountContainer}>
+        <Ionicons name="eye-outline" size={14} color={colors.textSecondary} />
+        <Text style={styles.viewCountText}>
+          {viewCountLoading ? (
+            '...'
+          ) : viewCount ? (
+            `${viewCount.viewCount}/${viewCount.totalUsers}`
+          ) : (
+            '0/0'
+          )}
+        </Text>
+      </View>
+      {/* Calificaciones de usuarios */}
+      {ratingsLoading ? (
+        <ActivityIndicator size="small" color={colors.textSecondary} style={styles.ratingsLoading} />
+      ) : ratings && ratings.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          scrollEnabled={hasMultipleRatings}
+          style={styles.ratingsScrollView}
+          contentContainerStyle={[
+            styles.ratingsContentContainer,
+            !hasMultipleRatings && styles.ratingsContentContainerNoScroll,
+          ]}
+        >
+          {ratings.map((rating: any) => (
+            <View key={rating.id} style={styles.ratingItem}>
+              <Text style={styles.ratingUsername} numberOfLines={1}>
+                {rating.username || 'Usuario'}
+              </Text>
+              <View style={styles.ratingValueContainer}>
+                <Ionicons name="star" size={10} color={colors.accent} />
+                <Text style={styles.ratingValue}>{rating.rating}</Text>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      ) : null}
+    </View>
+  );
+}
 
 // Componente para el contenido del modal de sinopsis con watch providers
 function MovieSynopsisContent({ movie }: { movie: any }) {
@@ -254,26 +333,13 @@ export default function PlaylistDetailModal({ visible, onClose, playlistId }: Pl
                     keyExtractor={(item, index) => item.id?.toString() || index.toString()}
                     contentContainerStyle={styles.carouselContainer}
                     renderItem={({ item, index }) => (
-                      <TouchableOpacity
-                        style={styles.posterItem}
+                      <MoviePosterItem
+                        movie={item}
                         onPress={() => {
                           setSelectedMovie(item);
                           setShowMovieModal(true);
                         }}
-                        activeOpacity={0.7}
-                      >
-                        {item.poster ? (
-                          <Image
-                            source={{ uri: item.poster }}
-                            style={styles.carouselPoster}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={[styles.carouselPoster, styles.posterPlaceholder]}>
-                            <Ionicons name="film-outline" size={32} color={colors.textMuted} />
-                          </View>
-                        )}
-                      </TouchableOpacity>
+                      />
                     )}
                   />
                 </View>
@@ -444,8 +510,12 @@ const styles = StyleSheet.create({
   carouselContainer: {
     paddingVertical: spacing.sm,
   },
-  posterItem: {
+  posterItemContainer: {
     marginRight: spacing.md,
+    alignItems: 'center',
+  },
+  posterItem: {
+    marginBottom: spacing.xs,
   },
   carouselPoster: {
     width: 100,
@@ -461,6 +531,60 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundLight,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  viewCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    marginTop: spacing.xs / 2,
+  },
+  viewCountText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  ratingsScrollView: {
+    marginTop: spacing.xs / 2,
+    maxHeight: 50,
+  },
+  ratingsContentContainer: {
+    paddingHorizontal: spacing.xs / 2,
+    gap: spacing.xs,
+  },
+  ratingsContentContainerNoScroll: {
+    justifyContent: 'center',
+  },
+  ratingsLoading: {
+    marginTop: spacing.xs / 2,
+  },
+  ratingItem: {
+    backgroundColor: colors.backgroundLight,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs / 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    minWidth: 60,
+    maxWidth: 80,
+  },
+  ratingUsername: {
+    ...typography.caption,
+    color: colors.text,
+    fontSize: 9,
+    fontWeight: '500',
+    marginBottom: spacing.xs / 2,
+  },
+  ratingValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+  },
+  ratingValue: {
+    ...typography.caption,
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '600',
   },
   emptyContainer: {
     padding: spacing.xl,

@@ -36,6 +36,21 @@ export const movieService = {
     return response.data;
   },
 
+  // Obtener conteo de usuarios que han visto una película
+  getMovieViewCount: async (movieId: string): Promise<{
+    movieId: string;
+    viewCount: number;
+    totalUsers: number;
+  }> => {
+    try {
+      const response = await api.get(`/movies/${movieId}/view-count`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching movie view count:', error);
+      throw error;
+    }
+  },
+
   // Obtener watch providers de una película (solo México - MX)
   getWatchProviders: async (tmdbId: number): Promise<{
     link: string | null;

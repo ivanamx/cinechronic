@@ -76,6 +76,38 @@ router.get('/top-rated', async (req, res) => {
   }
 });
 
+// Get movie view count (users who have rated the movie) - DEBE estar ANTES de /:id
+router.get('/:id/view-count', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Contar usuarios que han visto la película (tienen rating)
+    const viewCountResult = await pool.query(
+      `SELECT COUNT(DISTINCT user_id) as view_count
+       FROM ratings
+       WHERE movie_id = $1`,
+      [id]
+    );
+
+    // Contar total de usuarios en el sistema
+    const totalUsersResult = await pool.query(
+      `SELECT COUNT(*) as total_users FROM users`
+    );
+
+    const viewCount = parseInt(viewCountResult.rows[0]?.view_count || 0);
+    const totalUsers = parseInt(totalUsersResult.rows[0]?.total_users || 0);
+
+    res.json({
+      movieId: id,
+      viewCount,
+      totalUsers,
+    });
+  } catch (error) {
+    console.error('Error fetching movie view count:', error);
+    res.status(500).json({ message: 'Error fetching movie view count' });
+  }
+});
+
 // Get movie by ID (DEBE estar DESPUÉS de rutas específicas como /top-rated)
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
@@ -118,8 +150,8 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Get movie ratings
-router.get('/:id/ratings', authenticateToken, async (req, res) => {
+// Get movie ratings (sin autenticación para permitir acceso público)
+router.get('/:id/ratings', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT r.*, u.username, u.avatar
