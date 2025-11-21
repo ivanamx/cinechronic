@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Image, ActivityIndicator, FlatList } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { format } from 'date-fns';
 import { playlistService } from '../services/playlistService';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
@@ -101,19 +100,6 @@ export default function PlaylistDetailModal({ visible, onClose, playlistId }: Pl
     enabled: visible && !!playlistId,
   });
 
-  // Debug: ver qué datos llegan
-  React.useEffect(() => {
-    if (playlist) {
-      console.log('📅 Playlist data:', {
-        scheduled_date: playlist.scheduled_date,
-        scheduledDate: (playlist as any).scheduledDate,
-        allKeys: Object.keys(playlist),
-        director: (playlist as any).director,
-        hasDirector: !!(playlist as any).director,
-        directorProfileUrl: (playlist as any).director?.profileUrl,
-      });
-    }
-  }, [playlist]);
 
   // Calcular tiempo total
   const totalDuration = playlist?.movies?.reduce((total: number, movie: any) => {
@@ -149,7 +135,7 @@ export default function PlaylistDetailModal({ visible, onClose, playlistId }: Pl
             </View>
           ) : playlist ? (
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-              {/* Primera fila: Foto del director, nombre del ciclo y fecha */}
+              {/* Primera fila: Foto del director y nombre del ciclo */}
               <View style={styles.firstRow}>
                 {(playlist as any).director?.profileUrl ? (
                   <Image
@@ -174,26 +160,6 @@ export default function PlaylistDetailModal({ visible, onClose, playlistId }: Pl
                     </View>
                   </View>
                   <View style={styles.dateAndMoviesRow}>
-                    {(() => {
-                      const dateValue = (playlist as any).scheduled_date || (playlist as any).scheduledDate || playlist.scheduled_date;
-                      if (dateValue) {
-                        try {
-                          const date = typeof dateValue === 'string' 
-                            ? new Date(dateValue.includes('T') ? dateValue : dateValue + 'T00:00:00')
-                            : new Date(dateValue);
-                          if (!isNaN(date.getTime())) {
-                            return (
-                              <Text style={styles.cycleDate}>
-                                {format(date, 'dd/MM/yy')}
-                              </Text>
-                            );
-                          }
-                        } catch (error) {
-                          console.error('Error formatting date:', error, dateValue);
-                        }
-                      }
-                      return null;
-                    })()}
                     <View style={styles.moviesInfo}>
                       <Ionicons name="film-outline" size={14} color={colors.textSecondary} />
                       <Text style={styles.moviesCountText}>
@@ -387,11 +353,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     flexWrap: 'wrap',
-  },
-  cycleDate: {
-    ...typography.bodySmall,
-    color: colors.lime,
-    fontWeight: '500',
   },
   secondRow: {
     flexDirection: 'row',

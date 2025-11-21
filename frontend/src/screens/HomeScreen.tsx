@@ -4,8 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { playlistService } from '../services/playlistService';
 import { recommendationService, DirectorRecommendation } from '../services/recommendationService';
 import { movieService } from '../services/movieService';
@@ -391,22 +389,6 @@ export default function HomeScreen() {
               
               return filteredPlaylists.length > 0 ? (
                 filteredPlaylists.map((playlist) => {
-                // Obtener la fecha formateada en DD/MM/YY
-                const dateValue = (playlist as any).scheduled_date || (playlist as any).scheduledDate || playlist.scheduled_date;
-                let formattedDate = null;
-                if (dateValue) {
-                  try {
-                    const date = typeof dateValue === 'string' 
-                      ? new Date(dateValue.includes('T') ? dateValue : dateValue + 'T00:00:00')
-                      : new Date(dateValue);
-                    if (!isNaN(date.getTime())) {
-                      formattedDate = format(date, 'dd/MM/yy');
-                    }
-                  } catch (error) {
-                    console.error('Error formatting date:', error, dateValue);
-                  }
-                }
-
                 const director = (playlist as any).director;
                 const createdByUser = (playlist as any).created_by_user;
                 const countryCode = getCountryCode(director?.country);
@@ -421,7 +403,7 @@ export default function HomeScreen() {
                     }}
                     activeOpacity={0.7}
                   >
-                    {/* Fila con nombre, fecha y número de películas */}
+                    {/* Fila con nombre y número de películas */}
                     <View style={styles.cycleInfoRow}>
                       {director?.profileUrl ? (
                         <Image
@@ -435,26 +417,30 @@ export default function HomeScreen() {
                         </View>
                       )}
                       <View style={styles.cycleNameContainer}>
-                        <Text style={styles.cycleName}>{playlist.name}</Text>
-                        {countryCode && (
-                          <Text style={styles.cycleCountryCode}>{countryCode}</Text>
-                        )}
-                      </View>
-                      {formattedDate && (
-                        <Text style={styles.cycleDate}>{formattedDate}</Text>
-                      )}
-                      <View style={styles.moviesAndUserRow}>
+                        <View style={styles.cycleNameRow}>
+                          <Text style={styles.cycleName}>{playlist.name}</Text>
+                          {countryCode && (
+                            <Text style={styles.cycleCountryCode}>{countryCode}</Text>
+                          )}
+                        </View>
                         <Text style={styles.cycleMoviesCount}>
                           {playlist.movies?.length || 0} películas
                         </Text>
-                        {createdByUser?.username && (
-                          <View style={styles.userBadge}>
-                            <Ionicons name="person-circle-outline" size={12} color={colors.textSecondary} />
-                            <Text style={styles.userBadgeText}>{createdByUser.username}</Text>
-                          </View>
-                        )}
+                        <View style={styles.progressIndicator}>
+                          <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
+                          <Text style={styles.progressText}>3/5</Text>
+                        </View>
                       </View>
                     </View>
+                    {/* Fila con nombre de usuario */}
+                    {createdByUser?.username && (
+                      <View style={styles.userRow}>
+                        <View style={styles.userBadge}>
+                          <Ionicons name="person-circle-outline" size={12} color={colors.textSecondary} />
+                          <Text style={styles.userBadgeText}>{createdByUser.username}</Text>
+                        </View>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 );
                 })
@@ -773,11 +759,17 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   cycleNameContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: spacing.xs / 2,
+    flex: 1,
+    minWidth: 120,
+  },
+  cycleNameRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: spacing.xs,
-    flex: 1,
-    minWidth: 120,
+    flexWrap: 'wrap',
   },
   cycleName: {
     ...typography.h4,
@@ -790,22 +782,25 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 12,
   },
-  cycleDate: {
-    ...typography.bodySmall,
-    color: colors.lime,
-    fontWeight: '500',
-  },
-  moviesAndUserRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    flex: 1,
-    minWidth: 150,
-  },
   cycleMoviesCount: {
     ...typography.bodySmall,
     color: colors.textSecondary,
+    marginTop: spacing.xs / 2,
+  },
+  progressIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    marginTop: spacing.xs / 2,
+  },
+  progressText: {
+    ...typography.bodySmall,
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  userRow: {
+    marginTop: spacing.xs,
   },
   userBadge: {
     flexDirection: 'row',

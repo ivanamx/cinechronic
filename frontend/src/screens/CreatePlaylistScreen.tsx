@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { Calendar } from 'react-native-calendars';
-import { format } from 'date-fns';
 import { playlistService } from '../services/playlistService';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
@@ -18,8 +16,6 @@ interface CreatePlaylistModalProps {
 export default function CreatePlaylistModal({ visible, onClose, initialDirectorName }: CreatePlaylistModalProps) {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [showCalendar, setShowCalendar] = useState(false);
   const [suggestions, setSuggestions] = useState<Array<{ id: number; name: string; profileUrl: string | null }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -33,8 +29,6 @@ export default function CreatePlaylistModal({ visible, onClose, initialDirectorN
     } else if (!visible) {
       // Limpiar cuando se cierra el modal
       setName('');
-      setSelectedDate(null);
-      setShowCalendar(false);
       setSuggestions([]);
       setShowSuggestions(false);
     }
@@ -43,14 +37,12 @@ export default function CreatePlaylistModal({ visible, onClose, initialDirectorN
   const createMutation = useMutation({
     mutationFn: () => playlistService.createPlaylist({ 
       name,
-      date: selectedDate || undefined 
+      date: undefined 
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
       queryClient.invalidateQueries({ queryKey: ['scheduledPlaylists'] });
       setName('');
-      setSelectedDate(null);
-      setShowCalendar(false);
       onClose(true); // Pasar true para indicar que se creó exitosamente
     },
   });
@@ -63,8 +55,6 @@ export default function CreatePlaylistModal({ visible, onClose, initialDirectorN
 
   const handleClose = () => {
     setName('');
-    setSelectedDate(null);
-    setShowCalendar(false);
     setSuggestions([]);
     setShowSuggestions(false);
     if (searchTimeoutRef.current) {
@@ -120,25 +110,6 @@ export default function CreatePlaylistModal({ visible, onClose, initialDirectorN
     setName(director.name);
     setShowSuggestions(false);
     setSuggestions([]);
-  };
-
-  const handleDateSelect = (day: any) => {
-    setSelectedDate(day.dateString);
-    setShowCalendar(false);
-  };
-
-  const formatDateDisplay = (dateString: string | null): string => {
-    if (!dateString) return '';
-    try {
-      const date = new Date(dateString + 'T00:00:00'); // Agregar hora para evitar problemas de zona horaria
-      if (isNaN(date.getTime())) {
-        return dateString; // Retornar el string original si la fecha es inválida
-      }
-      return format(date, 'dd MMMM yyyy');
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return dateString;
-    }
   };
 
   return (
@@ -210,62 +181,6 @@ export default function CreatePlaylistModal({ visible, onClose, initialDirectorN
                     <Text style={styles.suggestionText}>{item.name}</Text>
                   </TouchableOpacity>
                 ))}
-              </View>
-            )}
-
-            <Text style={styles.label}>Fecha (opcional)</Text>
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowCalendar(!showCalendar)}
-            >
-              <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
-              <Text style={[styles.dateText, !selectedDate && styles.datePlaceholder]}>
-                {selectedDate ? formatDateDisplay(selectedDate) : 'Seleccionar fecha'}
-              </Text>
-              {selectedDate && (
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setSelectedDate(null);
-                  }}
-                  style={styles.clearDateButton}
-                >
-                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-            </TouchableOpacity>
-
-            {showCalendar && (
-              <View style={styles.calendarContainer}>
-                <Calendar
-                  onDayPress={handleDateSelect}
-                  markedDates={
-                    selectedDate
-                      ? {
-                          [selectedDate]: {
-                            selected: true,
-                            selectedColor: colors.primary,
-                          },
-                        }
-                      : {}
-                  }
-                  theme={{
-                    backgroundColor: colors.backgroundDark,
-                    calendarBackground: colors.backgroundDark,
-                    textSectionTitleColor: colors.text,
-                    selectedDayBackgroundColor: colors.primary,
-                    selectedDayTextColor: colors.text,
-                    todayTextColor: colors.accent,
-                    dayTextColor: colors.text,
-                    textDisabledColor: colors.textMuted,
-                    arrowColor: colors.primary,
-                    monthTextColor: colors.text,
-                    textDayFontWeight: '400',
-                    textMonthFontWeight: '600',
-                    textDayHeaderFontWeight: '500',
-                  }}
-                  minDate={new Date().toISOString().split('T')[0]}
-        />
               </View>
             )}
 
@@ -393,34 +308,6 @@ const styles = StyleSheet.create({
   createButtonText: {
     ...typography.h4,
     color: colors.lime,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundLight,
-    padding: spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.sm,
-  },
-  dateText: {
-    ...typography.body,
-    color: colors.text,
-    flex: 1,
-  },
-  datePlaceholder: {
-    color: colors.textMuted,
-  },
-  clearDateButton: {
-    padding: spacing.xs,
-  },
-  calendarContainer: {
-    marginTop: spacing.md,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
 });
 
